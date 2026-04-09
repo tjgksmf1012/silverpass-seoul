@@ -1,0 +1,161 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Pretendard Variable', Pretendard, 'Malgun Gothic', '맑은 고딕',
+      -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    font-feature-settings: 'tnum';
+  }
+  body {
+    @apply bg-cream-50 text-slate-900 antialiased;
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    box-shadow: 0 0 60px -20px rgb(15 118 110 / 0.08);
+  }
+  button {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  input, textarea, select {
+    font-family: inherit;
+  }
+}
+
+@layer components {
+  /* Buttons */
+  .btn-primary {
+    @apply w-full bg-brand-gradient text-white font-bold py-4 px-6 rounded-2xl text-lg
+           shadow-lift active:scale-[0.98] transition-all;
+  }
+  .btn-secondary {
+    @apply w-full bg-white border-2 border-brand-700 text-brand-700 font-bold py-4 px-6
+           rounded-2xl text-lg active:scale-[0.98] transition-all;
+  }
+  .btn-danger {
+    @apply w-full bg-red-500 text-white font-bold py-4 px-6 rounded-2xl text-lg
+           shadow-lift active:scale-[0.98] transition-all;
+  }
+  .btn-ghost-danger {
+    @apply w-full bg-red-50 border-2 border-red-200 text-red-600 font-bold py-4
+           rounded-2xl text-lg active:scale-[0.98] transition-all
+           flex items-center justify-center gap-2;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-white rounded-3xl shadow-card p-5;
+  }
+  .card-flat {
+    @apply bg-white rounded-2xl border border-slate-100 p-4;
+  }
+
+  /* Quick destination button */
+  .quick-btn {
+    @apply relative flex flex-col items-center justify-center bg-white rounded-3xl
+           shadow-card p-5 gap-2 active:scale-[0.96] transition-all overflow-hidden
+           min-h-[140px];
+  }
+
+  /* Bottom nav */
+  .bottom-nav {
+    @apply fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px]
+           bg-white/95 backdrop-blur border-t border-slate-100 flex justify-around
+           py-2 pb-3 z-50;
+  }
+  .nav-item {
+    @apply flex flex-col items-center gap-1 text-xs font-bold text-slate-400
+           py-1 px-4 rounded-xl transition-colors;
+  }
+  .nav-item.active {
+    @apply text-brand-700;
+  }
+
+  /* Inputs */
+  .input-base {
+    @apply w-full border-2 border-slate-200 rounded-2xl px-4 py-3.5 text-base
+           outline-none focus:border-brand-500 transition-colors bg-white;
+  }
+
+  /* Header gradient */
+  .header-gradient {
+    @apply bg-brand-gradient text-white relative overflow-hidden;
+  }
+  .header-gradient::before {
+    content: '';
+    position: absolute;
+    top: -30%;
+    right: -10%;
+    width: 220px;
+    height: 220px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .header-gradient::after {
+    content: '';
+    position: absolute;
+    bottom: -50%;
+    left: -10%;
+    width: 180px;
+    height: 180px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.08) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  /* Tags / chips */
+  .chip {
+    @apply inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-full;
+  }
+  .chip-brand {
+    @apply chip bg-brand-50 text-brand-700;
+  }
+  .chip-warn {
+    @apply chip bg-amber-50 text-amber-700;
+  }
+  .chip-good {
+    @apply chip bg-emerald-50 text-emerald-700;
+  }
+
+  /* Senior-friendly text */
+  .text-senior {
+    font-size: 1.125rem;
+    line-height: 1.75;
+    color: #1e293b;
+  }
+}
+
+/* Animations */
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+  50% { box-shadow: 0 0 0 24px rgba(239, 68, 68, 0); }
+}
+.btn-emergency-pulse {
+  animation: pulse-red 2s infinite;
+}
+
+@keyframes float-in {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.float-in {
+  animation: float-in 0.4s ease-out;
+}
+.float-in-delay-1 { animation-delay: 0.05s; animation-fill-mode: backwards; }
+.float-in-delay-2 { animation-delay: 0.1s; animation-fill-mode: backwards; }
+.float-in-delay-3 { animation-delay: 0.15s; animation-fill-mode: backwards; }
+.float-in-delay-4 { animation-delay: 0.2s; animation-fill-mode: backwards; }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, #e2e8f0 0%, #f1f5f9 50%, #e2e8f0 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}

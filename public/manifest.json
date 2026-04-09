@@ -1,0 +1,29 @@
+{
+  "name": "실버패스 서울 Care",
+  "short_name": "실버패스",
+  "description": "고령자·보호자·돌봄기관이 함께 쓰는 생활권 이동 AI 코파일럿",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FEFCF8",
+  "theme_color": "#0F766E",
+  "lang": "ko",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health", "navigation", "utilities"],
+  "shortcuts": [
+    {
+      "name": "응급 신고",
+      "short_name": "응급",
+      "description": "즉시 119 연결",
+      "url": "/emergency",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    }
+  ]
+}

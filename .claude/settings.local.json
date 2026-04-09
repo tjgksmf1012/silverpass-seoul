@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/cyci/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/bfcbc4f1-819b-4594-88b0-4ddc79d2febf/b2a0ddb5-8097-43eb-bc5e-01b1eac6abed/skills/docx/**)",
+      "Bash(pandoc --track-changes=all \"C:\\\\Users\\\\cyci\\\\Documents\\\\카카오톡 받은 파일\\\\실버패스_서울_Care_사업기획서.docx\" -o output.md)",
+      "Bash(python scripts/office/unpack.py \"C:\\\\Users\\\\cyci\\\\Documents\\\\카카오톡 받은 파일\\\\실버패스_서울_Care_사업기획서.docx\" unpacked_silverpass/)",
+      "Read(//usr/**)",
+      "Bash(ls /c/Python*)",
+      "Read(//c/Users/cyci/AppData/Local/Programs/**)",
+      "Bash(/c/Users/cyci/AppData/Local/Microsoft/WindowsApps/python3 --version)",
+      "Bash(powershell -Command 'Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip = [System.IO.Compression.ZipFile]::OpenRead\\('\\\\''C:\\\\Users\\\\cyci\\\\Documents\\\\카카오톡 받은 파일\\\\실버패스_서울_Care_사업기획서.docx'\\\\''\\); $entry = $zip.Entries | Where-Object { $_.FullName -eq '\\\\''word/document.xml'\\\\'' }; $reader = [System.IO.StreamReader]::new\\($entry.Open\\(\\)\\); $content = $reader.ReadToEnd\\(\\); $reader.Close\\(\\); $zip.Dispose\\(\\); $content')",
+      "Bash(powershell -Command ':*)",
+      "Bash(npm create:*)",
+      "Bash(powershell -Command \"Get-Command node, npm, npx -ErrorAction SilentlyContinue | Select-Object Name, Source\")",
+      "Bash(powershell -Command \"node --version; npm --version\")",
+      "Bash(powershell -Command \"& {[System.Environment]::GetEnvironmentVariable\\('PATH', 'Machine'\\) + ';' + [System.Environment]::GetEnvironmentVariable\\('PATH', 'User'\\)}\")",
+      "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\")",
+      "Bash(npm --version)",
+      "Bash(npm install:*)",
+      "Bash(timeout 15 npm run dev)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npm uninstall:*)",
+      "Bash(powershell -Command \"Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Seconds 1; 'killed'\")",
+      "Bash(powershell -Command \"Test-NetConnection -ComputerName localhost -Port 5173 -InformationLevel Quiet\")",
+      "Bash(dir \"C:\\\\Users\\\\cyci\\\\Desktop\\\\SilverPass_Seoul\")",
+      "Bash(pandoc --track-changes=all \"C:/Users/cyci/Documents/카카오톡 받은 파일/실버패스_서울_Care_사업기획서.docx\" -o /tmp/splan.md)",
+      "Read(//tmp/**)",
+      "Bash(python scripts/office/unpack.py \"C:/Users/cyci/Documents/카카오톡 받은 파일/실버패스_서울_Care_사업기획서.docx\" /tmp/splan_unpacked/)",
+      "Bash(python3 -c ':*)",
+      "Bash(where python:*)",
+      "Bash(where python3:*)",
+      "Bash(where py:*)",
+      "Bash(cmd.exe /c \"py --version 2>&1 && py -c \\\\\"import zipfile; z=zipfile.ZipFile\\('C:/Users/cyci/Documents/카카오톡 받은 파일/실버패스_서울_Care_사업기획서.docx'\\); [print\\(n\\) for n in z.namelist\\(\\)]\\\\\" 2>&1\")",
+      "Bash(powershell.exe -Command ':*)",
+      "Bash(npm run:*)",
+      "Bash(npx vercel:*)",
+      "Bash(gh auth:*)"
+    ]
+  }
+}
