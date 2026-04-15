@@ -9,6 +9,12 @@ export default function Emergency() {
   const { state } = useLocation()
   const profile = getProfile()
   const [hospitals, setHospitals] = useState([])
+  const [toast, setToast] = useState('')
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3000)
+  }
 
   useEffect(() => {
     if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400])
@@ -20,13 +26,20 @@ export default function Emergency() {
     if (profile.guardianPhone) {
       window.location.href = `tel:${profile.guardianPhone.replace(/-/g, '')}`
     } else {
-      alert('보호자 전화번호가 설정되어 있지 않아요.\n프로필에서 먼저 설정해 주세요.')
-      navigate('/profile')
+      showToast('보호자 전화번호가 설정되어 있지 않아요')
+      setTimeout(() => navigate('/profile'), 1500)
     }
   }
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#FFF' }}>
+
+      {/* 토스트 알림 */}
+      {toast && (
+        <div style={{ position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 999, background: '#1E293B', color: '#fff', fontSize: 15, fontWeight: 600, padding: '14px 20px', borderRadius: 14, boxShadow: '0 4px 20px rgba(0,0,0,0.2)', whiteSpace: 'nowrap', animation: 'fadeIn 0.2s ease' }}>
+          {toast}
+        </div>
+      )}
 
       {/* 상단 빨간 배너 */}
       <div style={{
@@ -133,19 +146,19 @@ export default function Emergency() {
         )}
 
         {/* 안내 사항 */}
-        <div style={{ background: '#F8F9FA', border: '1.5px solid #E2E8F0', borderRadius: 16, padding: '16px 18px' }}>
-          <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: '0 0 12px' }}>응급 시 안내사항</p>
+        <div style={{ background: '#F8F9FA', border: '1.5px solid #E2E8F0', borderRadius: 16, padding: '18px' }}>
+          <p style={{ fontWeight: 700, fontSize: 16, color: '#0F172A', margin: '0 0 14px' }}>응급 시 안내사항</p>
           {[
             '현재 위치를 정확히 말씀하세요',
             '증상을 간단히 설명하세요',
             '혼자 이동하지 마세요',
             '주변 사람에게 도움을 요청하세요',
           ].map((text, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: i < 3 ? 10 : 0 }}>
-              <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#FEF2F2', border: '1.5px solid #FECACA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
-                <span style={{ fontSize: 10, fontWeight: 800, color: '#DC2626' }}>{i + 1}</span>
+            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: i < 3 ? 12 : 0 }}>
+              <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#FEF2F2', border: '1.5px solid #FECACA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#DC2626' }}>{i + 1}</span>
               </div>
-              <p style={{ fontSize: 14, color: '#374151', margin: 0, lineHeight: 1.5 }}>{text}</p>
+              <p style={{ fontSize: 16, color: '#374151', margin: 0, lineHeight: 1.6 }}>{text}</p>
             </div>
           ))}
         </div>

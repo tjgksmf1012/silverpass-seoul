@@ -36,15 +36,30 @@ export default function Route_() {
   }, [])
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, background: '#F8F9FA' }}>
-      <div style={{ width: 52, height: 52, borderRadius: '50%', border: '3px solid #E2E8F0', borderTopColor: '#0D9488', animation: 'spin 0.8s linear infinite' }} />
-      <p style={{ fontSize: 18, fontWeight: 700, color: '#0D9488', margin: 0 }}>최적 경로 찾는 중</p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
-        {['대기질 분석', '승강기 현황 확인', '저상버스 도착 확인', '약국 정보 확인'].map(t => (
-          <span key={t} style={{ fontSize: 13, color: '#94A3B8' }}>{t}</span>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, background: '#F8F9FA', padding: '0 24px' }}>
+      <div style={{ width: 56, height: 56, borderRadius: '50%', border: '3px solid #E2E8F0', borderTopColor: '#0D9488', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ textAlign: 'center' }}>
+        <p style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', margin: '0 0 4px' }}>{destination}</p>
+        <p style={{ fontSize: 15, fontWeight: 600, color: '#0D9488', margin: 0 }}>최적 경로를 분석하는 중이에요</p>
+      </div>
+      <div style={{ width: '100%', maxWidth: 280, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {[
+          { label: '실시간 대기질 분석', color: '#059669' },
+          { label: '승강기 가동 현황 확인', color: '#2563EB' },
+          { label: '저상버스 도착 정보', color: '#7C3AED' },
+          { label: '근처 약국 정보', color: '#D97706' },
+        ].map((item, i) => (
+          <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 12, padding: '12px 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', animation: `fadeIn 0.4s ease ${i * 0.15}s both` }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.color, animation: 'pulse 1.5s ease-in-out infinite', flexShrink: 0 }} />
+            <span style={{ fontSize: 14, color: '#374151', fontWeight: 600 }}>{item.label}</span>
+          </div>
         ))}
       </div>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg) } }
+        @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.3 } }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
+      `}</style>
     </div>
   )
 

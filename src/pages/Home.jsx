@@ -156,7 +156,7 @@ export default function Home() {
 
         {/* ── 자주 가는 곳 ── */}
         <div>
-          <p style={{ fontSize: 13, fontWeight: 700, color: '#94A3B8', marginBottom: 12, letterSpacing: '0.02em' }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: '#94A3B8', marginBottom: 12, letterSpacing: '0.02em' }}>
             자주 가는 곳
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -188,8 +188,8 @@ export default function Home() {
                   <div style={{ minWidth: 0, width: '100%' }}>
                     <p style={{ fontWeight: 800, fontSize: 17, color: '#0F172A', margin: 0 }}>{fav.name}</p>
                     {fav.address
-                      ? <p style={{ color: '#94A3B8', fontSize: 11, margin: '3px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fav.address}</p>
-                      : <p style={{ color: '#CBD5E1', fontSize: 11, margin: '3px 0 0' }}>주소 미설정</p>
+                      ? <p style={{ color: '#64748B', fontSize: 13, margin: '3px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fav.address}</p>
+                      : <p style={{ color: '#CBD5E1', fontSize: 13, margin: '3px 0 0' }}>탭하면 길 안내 시작</p>
                     }
                   </div>
                 </button>
@@ -201,7 +201,7 @@ export default function Home() {
         {/* ── 최근 이동 ── */}
         {history.length > 0 && (
           <div>
-            <p style={{ fontSize: 13, fontWeight: 700, color: '#94A3B8', marginBottom: 12, letterSpacing: '0.02em' }}>최근 이동</p>
+            <p style={{ fontSize: 14, fontWeight: 700, color: '#94A3B8', marginBottom: 12, letterSpacing: '0.02em' }}>최근 이동</p>
             <div style={{ background: '#fff', borderRadius: 16, overflow: 'hidden', border: '1.5px solid #F1F5F9', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
               {history.slice(0, 4).map((h, i) => {
                 const b = BURDEN_BADGE[h.burden] || BURDEN_BADGE.low
@@ -219,12 +219,12 @@ export default function Home() {
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontWeight: 700, fontSize: 15, color: '#0F172A', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.destination}</p>
-                      <p style={{ color: '#94A3B8', fontSize: 12, margin: '2px 0 0' }}>
+                      <p style={{ color: '#94A3B8', fontSize: 13, margin: '2px 0 0' }}>
                         {new Date(h.timestamp).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
                       </p>
                     </div>
                     {h.burden && (
-                      <span style={{ background: b.bg, color: b.text, fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, flexShrink: 0 }}>{b.label}</span>
+                      <span style={{ background: b.bg, color: b.text, fontSize: 13, fontWeight: 700, padding: '4px 10px', borderRadius: 20, flexShrink: 0 }}>{b.label}</span>
                     )}
                     <ChevronRight size={14} color="#E2E8F0" />
                   </button>

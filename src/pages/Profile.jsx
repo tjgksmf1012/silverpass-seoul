@@ -1,11 +1,16 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import BottomNav from '../components/BottomNav.jsx'
-import { ArrowLeft, UserIcon, PhoneIcon, WalkIcon, SettingsIcon, MapPin, CheckCircle, BuildingIcon } from '../components/Icons.jsx'
-import { getProfile, saveProfile } from '../services/storage.js'
+import { ArrowLeft, UserIcon, PhoneIcon, WalkIcon, SettingsIcon, MapPin, CheckCircle, BuildingIcon, HospitalIcon, PillIcon, HomeIcon } from '../components/Icons.jsx'
+import { getProfile, saveProfile, markVisited } from '../services/storage.js'
 
 const WALK_OPTIONS = [10, 15, 20, 30]
-const FAV_ICONS = { 복지관: '🏛️', 병원: '🏥', 약국: '💊', 집: '🏠' }
+const FAV_CFG = {
+  복지관: { Icon: BuildingIcon, bg: '#F5F3FF', color: '#7C3AED' },
+  병원:   { Icon: HospitalIcon, bg: '#EFF6FF', color: '#2563EB' },
+  약국:   { Icon: PillIcon,     bg: '#ECFDF5', color: '#059669' },
+  집:     { Icon: HomeIcon,     bg: '#FFFBEB', color: '#D97706' },
+}
 const DISTRICTS = [
   '종로구','중구','용산구','성동구','광진구','동대문구','중랑구','성북구',
   '강북구','도봉구','노원구','은평구','서대문구','마포구','양천구','강서구',
@@ -22,14 +27,14 @@ export default function Profile() {
     setProfile(p => ({ ...p, favorites: p.favorites.map(f => f.id === id ? { ...f, [field]: val } : f) }))
     setSaved(false)
   }
-  function handleSave() { saveProfile(profile); setSaved(true); setTimeout(() => navigate('/'), 800) }
+  function handleSave() { saveProfile(profile); markVisited(); setSaved(true); setTimeout(() => navigate('/'), 800) }
 
   return (
     <div style={{ minHeight: '100vh', background: '#F8F9FA', paddingBottom: 100 }}>
 
       {/* 헤더 */}
       <div style={{ background: '#fff', padding: '52px 16px 20px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', gap: 14 }}>
-        <button onClick={() => navigate('/')} style={{ width: 40, height: 40, borderRadius: 12, border: '1.5px solid #E2E8F0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+        <button onClick={() => { markVisited(); navigate('/') }} style={{ width: 40, height: 40, borderRadius: 12, border: '1.5px solid #E2E8F0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
           <ArrowLeft size={18} color="#0F172A" />
         </button>
         <div>
@@ -41,7 +46,7 @@ export default function Profile() {
       <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
         {/* 이름 */}
-        <Card icon={<UserIcon size={16} color="#0D9488" />} title="이름 (선택)">
+        <Card icon={<UserIcon size={16} color="#0D9488" />} title="이름">
           <input type="text" value={profile.name} onChange={e => update('name', e.target.value)}
             placeholder="홍길동" style={inputSt} />
         </Card>
@@ -89,18 +94,22 @@ export default function Profile() {
 
         {/* 자주 가는 곳 */}
         <Card icon={<MapPin size={16} color="#0D9488" />} title="자주 가는 곳 주소">
-          {profile.favorites.map((fav, i) => (
+          {profile.favorites.map((fav, i) => {
+            const cfg = FAV_CFG[fav.name] || { Icon: MapPin, bg: '#F0FDFA', color: '#0D9488' }
+            const { Icon } = cfg
+            return (
             <div key={fav.id} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: i < profile.favorites.length - 1 ? 14 : 0 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: '#F0FDFA', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
-                {FAV_ICONS[fav.name] || '📍'}
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: cfg.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon size={22} color={cfg.color} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: '0 0 6px' }}>{fav.name}</p>
+                <p style={{ fontWeight: 700, fontSize: 15, color: '#0F172A', margin: '0 0 6px' }}>{fav.name}</p>
                 <input type="text" value={fav.address} onChange={e => updateFav(fav.id, 'address', e.target.value)}
-                  placeholder="주소 입력 (선택)" style={{ ...inputSt, fontSize: 13, padding: '10px 13px' }} />
+                  placeholder="주소 입력 (선택)" style={{ ...inputSt, fontSize: 14, padding: '10px 13px' }} />
               </div>
             </div>
-          ))}
+          )})}
+
         </Card>
 
         {/* 저장 */}

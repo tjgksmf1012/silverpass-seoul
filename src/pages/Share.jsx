@@ -56,8 +56,8 @@ export default function Share() {
         {currentRoute ? (
           <div style={{ background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <div style={{ padding: '14px 16px', borderBottom: '1px solid #F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0 }}>현재 이동</p>
-              <span style={{ background: '#ECFDF5', color: '#059669', fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20 }}>이동 중</span>
+              <p style={{ fontWeight: 700, fontSize: 15, color: '#0F172A', margin: 0 }}>이동 정보</p>
+              <span style={{ background: '#F0FDFA', color: '#0D9488', fontSize: 13, fontWeight: 700, padding: '4px 10px', borderRadius: 20 }}>공유 준비</span>
             </div>
             <div style={{ padding: '16px' }}>
               {[
