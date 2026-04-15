@@ -5,6 +5,7 @@ import { getRouteData } from '../services/seoulApi.js'
 import { generateRouteExplanation } from '../services/claude.js'
 import { ArrowLeft, BusIcon, ElevatorIcon, WindIcon, ToiletIcon,
          ShelterIcon, ShareIcon, AlertIcon, CheckCircle, PillIcon } from '../components/Icons.jsx'
+import RouteMap from '../components/RouteMap.jsx'
 
 const BURDEN = {
   low:    { bg: '#ECFDF5', border: '#A7F3D0', text: '#065F46', accent: '#059669', label: '이동 쉬움', sub: '편하게 다녀오실 수 있어요' },
@@ -115,7 +116,14 @@ export default function Route_() {
           </div>
         </div>
 
-        {/* ── ② 경고 배너 ── */}
+        {/* ── ② 지도 ── */}
+        <RouteMap
+          destination={destination}
+          toilets={routeData?.toilets}
+          pharmacies={routeData?.pharmacies}
+        />
+
+        {/* ── ③ 경고 배너 ── */}
         {routeData?.weatherAlert && (
           <div style={{ background: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: 14, padding: '13px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
             <AlertIcon size={18} color="#D97706" />
@@ -129,7 +137,7 @@ export default function Route_() {
             <div style={{ padding: '14px 16px', borderBottom: '1px solid #F8FAFC', display: 'flex', alignItems: 'center', gap: 8 }}>
               <BusIcon size={16} color="#0F172A" />
               <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0 }}>실시간 버스 도착</p>
-              <span style={{ marginLeft: 'auto', background: '#ECFDF5', color: '#059669', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20 }}>LIVE</span>
+              <span style={{ marginLeft: 'auto', background: '#F8F9FA', color: '#94A3B8', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20 }}>예시</span>
             </div>
             {routeData.buses.map((bus, i) => (
               <div key={i} style={{ padding: '14px 16px', borderBottom: i < routeData.buses.length - 1 ? '1px solid #F8FAFC' : 'none', display: 'flex', alignItems: 'center', gap: 12 }}>

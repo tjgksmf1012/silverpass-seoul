@@ -2,9 +2,22 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import BottomNav from '../components/BottomNav.jsx'
 import { SearchIcon, MicIcon, ChevronRight, ClockIcon, AlertIcon,
-         BuildingIcon, HospitalIcon, PillIcon, HomeIcon } from '../components/Icons.jsx'
-import { getProfile, getHistory } from '../services/storage.js'
+         BuildingIcon, HospitalIcon, PillIcon, HomeIcon, WindIcon } from '../components/Icons.jsx'
+import { getProfile, getHistory, saveProfile } from '../services/storage.js'
 import { checkEmergency, parseUserQuery } from '../services/claude.js'
+import { getAirQuality } from '../services/seoulApi.js'
+
+async function reverseGeocode(lat, lon) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=ko`,
+      { headers: { 'User-Agent': 'SilverPassSeoulCare/1.0' } }
+    )
+    const data = await res.json()
+    const raw = data.address?.city_district || data.address?.suburb || data.address?.quarter || ''
+    return raw.replace(/서울특별시\s*/, '').trim() || null
+  } catch { return null }
+}
 
 const HOUR = new Date().getHours()
 const GREETING =
@@ -37,9 +50,35 @@ export default function Home() {
   const [listening, setListening] = useState(false)
   const [profile, setProfile] = useState(getProfile())
   const [history, setHistory] = useState(getHistory())
+  const [airNow, setAirNow] = useState(null)
+  const [locating, setLocating] = useState(false)
   const recognitionRef = useRef(null)
 
-  useEffect(() => { setProfile(getProfile()); setHistory(getHistory()) }, [])
+  useEffect(() => {
+    const p = getProfile()
+    setProfile(p)
+    setHistory(getHistory())
+    getAirQuality(p.district || '종로구').then(setAirNow)
+  }, [])
+
+  async function detectLocation() {
+    if (!navigator.geolocation) return
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        const district = await reverseGeocode(pos.coords.latitude, pos.coords.longitude)
+        if (district) {
+          const updated = { ...getProfile(), district }
+          saveProfile(updated)
+          setProfile(updated)
+          getAirQuality(district).then(setAirNow)
+        }
+        setLocating(false)
+      },
+      () => setLocating(false),
+      { timeout: 8000 }
+    )
+  }
 
   async function handleSearch(q) {
     const text = (q || query).trim()
@@ -69,15 +108,54 @@ export default function Home() {
     <div style={{ minHeight: '100vh', background: '#F8F9FA', paddingBottom: 80 }}>
 
       {/* ── 상단 헤더 ── */}
-      <div style={{ background: '#fff', padding: '56px 20px 24px', borderBottom: '1px solid #F1F5F9' }}>
-        <p style={{ fontSize: 13, color: '#94A3B8', fontWeight: 600, margin: '0 0 6px', letterSpacing: '0.02em' }}>
-          {GREETING}
-        </p>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', margin: 0, lineHeight: 1.2 }}>
-          {profile.name ? `${profile.name}님,` : '실버패스 서울 Care'}
-          <br />
-          <span style={{ color: '#0D9488' }}>어디 가실 건가요?</span>
-        </h1>
+      <div style={{ background: '#fff', padding: '52px 20px 20px', borderBottom: '1px solid #F1F5F9' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div>
+            <p style={{ fontSize: 13, color: '#94A3B8', fontWeight: 600, margin: '0 0 4px', letterSpacing: '0.02em' }}>
+              {GREETING}
+            </p>
+            <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0, lineHeight: 1.25 }}>
+              {profile.name ? `${profile.name}님,` : '실버패스 서울 Care'}
+              <br />
+              <span style={{ color: '#0D9488' }}>어디 가실 건가요?</span>
+            </h1>
+          </div>
+          {/* 위치 감지 버튼 */}
+          <button onClick={detectLocation} disabled={locating} style={{
+            flexShrink: 0, marginTop: 4,
+            background: locating ? '#F0FDFA' : '#fff',
+            border: '1.5px solid #CCFBF1',
+            borderRadius: 12, padding: '8px 12px',
+            display: 'flex', alignItems: 'center', gap: 6,
+            cursor: 'pointer', transition: 'all 0.2s',
+          }}>
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={locating ? '#0D9488' : '#64748B'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+              <path d="m4.22 4.22 2.12 2.12M17.66 17.66l2.12 2.12M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+            </svg>
+            <span style={{ fontSize: 12, fontWeight: 700, color: locating ? '#0D9488' : '#64748B' }}>
+              {locating ? '감지 중…' : profile.district || '위치'}
+            </span>
+          </button>
+        </div>
+
+        {/* 실시간 대기질 배너 */}
+        {airNow && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: airNow.airAlert ? '#FEF2F2' : '#F0FDFA',
+            border: `1px solid ${airNow.airAlert ? '#FECACA' : '#CCFBF1'}`,
+            borderRadius: 10, padding: '8px 12px', marginTop: 4,
+          }}>
+            <WindIcon size={14} color={airNow.airAlert ? '#DC2626' : '#0D9488'} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: airNow.airAlert ? '#DC2626' : '#0D9488' }}>
+              {profile.district || '서울'} 대기질 {airNow.grade}
+            </span>
+            <span style={{ fontSize: 12, color: '#94A3B8', marginLeft: 'auto' }}>
+              PM10 {airNow.pm10}㎍/㎥ · 실시간
+            </span>
+          </div>
+        )}
       </div>
 
       <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -244,6 +322,33 @@ export default function Home() {
           <AlertIcon size={22} color="#DC2626" />
           <span style={{ fontSize: 18, fontWeight: 800, color: '#DC2626' }}>응급 상황</span>
         </button>
+
+        {/* ── 빅데이터 활용 현황 ── */}
+        <div style={{ background: '#F8F9FA', borderRadius: 16, padding: '18px', border: '1.5px solid #F1F5F9' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <p style={{ fontWeight: 800, fontSize: 14, color: '#0F172A', margin: 0 }}>활용 공공 빅데이터</p>
+            <span style={{ background: '#ECFDF5', color: '#059669', fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>실시간 연동</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[
+              { source: '서울 열린데이터광장', items: ['실시간 대기환경(PM10/PM2.5)', '지하철 승강기 가동현황', '공중화장실 위치정보', '무더위쉼터 현황'], color: '#0D9488', bg: '#F0FDFA' },
+              { source: '공공데이터포털', items: ['약국 현황 조회', '응급의료기관 목록'], color: '#2563EB', bg: '#EFF6FF' },
+              { source: 'Claude AI (Anthropic)', items: ['개인 맞춤형 경로 설명 생성'], color: '#7C3AED', bg: '#F5F3FF' },
+            ].map(({ source, items, color, bg }) => (
+              <div key={source} style={{ background: bg, borderRadius: 12, padding: '12px 14px' }}>
+                <p style={{ fontWeight: 700, fontSize: 13, color, margin: '0 0 6px' }}>{source}</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {items.map(item => (
+                    <span key={item} style={{ background: '#fff', color: '#374151', fontSize: 12, fontWeight: 500, padding: '3px 8px', borderRadius: 20 }}>{item}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p style={{ fontSize: 12, color: '#94A3B8', margin: '12px 0 0', textAlign: 'center' }}>
+            서울시 고령자 168만 명을 위한 실시간 안전 이동 서비스
+          </p>
+        </div>
 
       </div>
       <BottomNav />

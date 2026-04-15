@@ -273,7 +273,7 @@ function buildDataSources(air, elevator) {
   return [
     { label: '실시간 대기환경', api: 'RealtimeCityAir', live: !IS_DEMO },
     { label: '승강기 가동현황', api: 'LiftStatusInfoService', live: !IS_DEMO },
-    { label: '버스 도착정보', api: 'BusStopArInfoByRouteList', live: false },
+    { label: '버스 도착정보', api: 'BusStopArInfoByRouteList', live: false, note: '정류장ID 필요' },
     { label: '공중화장실 위치', api: 'SearchPublicToiletPOIService', live: !IS_DEMO },
     { label: '근처 약국', api: '공공데이터포털 약국현황', live: !IS_GONGGONG_DEMO },
   ]
