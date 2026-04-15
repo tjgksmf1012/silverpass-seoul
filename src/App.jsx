@@ -5,6 +5,7 @@ import Route_ from './pages/Route.jsx'
 import Share from './pages/Share.jsx'
 import Emergency from './pages/Emergency.jsx'
 import Onboarding from './pages/Onboarding.jsx'
+import NotFound from './pages/NotFound.jsx'
 import { isFirstVisit } from './services/storage.js'
 
 // 별도 컴포넌트로 분리 → React가 매 렌더마다 isFirstVisit()을 새로 평가
@@ -24,6 +25,7 @@ export default function App() {
       <Route path="/route" element={<Route_ />} />
       <Route path="/share" element={<Share />} />
       <Route path="/emergency" element={<Emergency />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   )
 }
