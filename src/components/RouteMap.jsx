@@ -95,11 +95,17 @@ export default function RouteMap({ destination, toilets = [], pharmacies = [] })
       })
       .catch(() => setStatus('error'))
 
-    // 2. 현재 위치 표시
+    // 2. 현재 위치 표시 (한국 좌표 범위 내일 때만)
     navigator.geolocation?.getCurrentPosition(
       pos => {
         if (!mapRef.current) return
         const { latitude: lat, longitude: lon } = pos.coords
+
+        // 한국 위경도 범위 벗어나면 GPS 핀 표시 안 함
+        // (서울 외 지역에서 앱 테스트 시 지도가 해외로 날아가는 버그 방지)
+        const inKorea = lat >= 33.0 && lat <= 38.7 && lon >= 124.5 && lon <= 131.0
+        if (!inKorea) return
+
         const myLatLng = [lat, lon]
 
         L.marker(myLatLng, { icon: makeIcon('#2563EB', 18) })

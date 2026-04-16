@@ -66,7 +66,12 @@ export default function Home() {
     setLocating(true)
     navigator.geolocation.getCurrentPosition(
       async pos => {
-        const district = await reverseGeocode(pos.coords.latitude, pos.coords.longitude)
+        const { latitude: lat, longitude: lon } = pos.coords
+        // 한국 범위 밖이면 무시 (해외에서 테스트 시 이상한 구 이름 저장 방지)
+        const inKorea = lat >= 33.0 && lat <= 38.7 && lon >= 124.5 && lon <= 131.0
+        if (!inKorea) { setLocating(false); return }
+
+        const district = await reverseGeocode(lat, lon)
         if (district) {
           const updated = { ...getProfile(), district }
           saveProfile(updated)
