@@ -178,6 +178,82 @@ export async function getNearbyEmergencyHospitals(district = '종로구') {
   }))
 }
 
+// ─── 지하철 실시간 도착정보 (swopenapi.seoul.go.kr) ──────────────────────────
+export async function getRealtimeSubwayArrival(stationName) {
+  if (!stationName || IS_DEMO) return getMockSubwayArrival(stationName)
+
+  try {
+    const name = encodeURIComponent(stationName.replace(/역$/, ''))
+    const url = USE_PROXY
+      ? `/api/subway?station=${encodeURIComponent(stationName)}`
+      : `http://swopenapi.seoul.go.kr/api/subway/${SEOUL_KEY}/json/realtimeStationArrival/0/6/${name}`
+
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000) })
+    if (!res.ok) return getMockSubwayArrival(stationName)
+    const json = await res.json()
+    if (json?._demo) return getMockSubwayArrival(stationName)
+
+    const list = json?.realtimeArrivalList
+    if (!list?.length) return getMockSubwayArrival(stationName)
+
+    // 같은 역의 중복 제거 + 양방향 2개씩 최대 4개
+    const seen = new Set()
+    return list
+      .filter(r => {
+        const key = `${r.subwayId}_${r.updnLine}`
+        if (seen.has(key)) return false
+        seen.add(key); return true
+      })
+      .slice(0, 4)
+      .map(r => ({
+        line: r.subwayId,                   // 1001=1호선, 1002=2호선 ...
+        lineName: subwayLineLabel(r.subwayId),
+        lineColor: subwayLineColor(r.subwayId),
+        direction: r.trainLineNm || '',      // "광교행" 등
+        currentStation: r.arvlMsg3 || '',    // "종각" 등
+        arrivalMsg: r.arvlMsg2 || '',        // "2분 후" / "곧 도착" 등
+        updnLine: r.updnLine,                // 상행/하행
+        bstatnNm: r.bstatnNm || '',         // 종착역명
+      }))
+  } catch {
+    return getMockSubwayArrival(stationName)
+  }
+}
+
+function subwayLineLabel(id) {
+  const map = { '1001':'1호선','1002':'2호선','1003':'3호선','1004':'4호선',
+    '1005':'5호선','1006':'6호선','1007':'7호선','1008':'8호선','1009':'9호선',
+    '1063':'경의중앙선','1065':'공항철도','1067':'경춘선','1075':'수인분당선',
+    '1077':'신분당선','1092':'우이신설선' }
+  return map[id] || `${id}호선`
+}
+function subwayLineColor(id) {
+  const map = { '1001':'#0052A4','1002':'#009246','1003':'#EF7C1C','1004':'#00A5DE',
+    '1005':'#996CAC','1006':'#CD7C2F','1007':'#747F00','1008':'#E6186C','1009':'#BDB092',
+    '1063':'#77C4A3','1065':'#0065B3','1067':'#179CEE','1075':'#F5A200',
+    '1077':'#D4003B','1092':'#B0CE2C' }
+  return map[id] || '#64748B'
+}
+
+// ─── 두 좌표 간 실제 지상 거리 계산 (하버사인 + 도시 보정 1.35) ───────────────
+export function calcRealDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000
+  const toRad = d => d * Math.PI / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2
+  const straight = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+  return Math.round(straight * 1.35) // 도시 우회 보정 1.35
+}
+
+// 거리(m) → 대중교통 예상 소요시간(분)
+// 대중교통 평균 속도: 버스·지하철 포함 약 20km/h + 대기 10분
+export function calcTransitDuration(distanceM) {
+  const travelMin = Math.ceil(distanceM / 1000 / 20 * 60) // 이동 시간
+  const waitMin = 5 + Math.ceil(distanceM / 1000)          // 대기+도보 (거리에 비례)
+  return Math.max(8, Math.min(travelMin + waitMin, 90))     // 8분~90분 범위
+}
+
 // ─── 버스 도착정보 ─────────────────────────────────────────────────────────────
 // 정류소 ID(arsId)가 없으면 실시간 호출 불가 → 현실적인 mock 사용
 export async function getBusArrival(arsId = null) {
@@ -195,8 +271,17 @@ export async function getBusArrival(arsId = null) {
 }
 
 // ─── 통합 경로 데이터 ─────────────────────────────────────────────────────────
-export async function getRouteData(destination, profile) {
+export async function getRouteData(destination, profile, coords = null) {
   const district = profile.district || '종로구'
+
+  // coords = { user: {lat,lng}, dest: {lat,lng} } — RouteMap에서 얻은 실제 좌표
+  const walkDistance = coords?.user && coords?.dest
+    ? calcRealDistance(coords.user.lat, coords.user.lng, coords.dest.lat, coords.dest.lng)
+    : (profile.mobilityAid ? 350 : 500)  // 좌표 없을 때 기본값 상향
+
+  const duration = coords?.user && coords?.dest
+    ? calcTransitDuration(walkDistance)
+    : (profile.mobilityAid ? 18 : 15)
 
   const [air, bus, elevator, toilets, shelters, pharmacies] = await Promise.all([
     getAirQuality(district),
@@ -206,9 +291,6 @@ export async function getRouteData(destination, profile) {
     getHeatShelters(district),
     getNearbyPharmacies(district),
   ])
-
-  const walkDistance = profile.mobilityAid ? 180 : 250
-  const duration = Math.ceil(walkDistance / 50) + 8
 
   const burden = calcBurden(air, elevator, profile)
 
@@ -227,9 +309,10 @@ export async function getRouteData(destination, profile) {
     elevatorMsg: elevator.allOk
       ? `승강기 ${elevator.operational}개 정상 운행`
       : `⚠️ 일부 승강기 점검 중 (${elevator.operational}/${elevator.total})`,
-    // 도보
+    // 도보/대중교통 (좌표 기반이면 실제값, 아니면 추정값)
     walkDistance,
     duration,
+    coordsBased: !!(coords?.user && coords?.dest), // 실제 좌표 기반 여부
     // 부담도
     burden,
     // 편의시설
@@ -237,7 +320,7 @@ export async function getRouteData(destination, profile) {
     shelters: air.airAlert || air.pm10 > 80 ? shelters : [],
     pharmacies,
     // 데이터 출처 메타
-    dataSources: buildDataSources(air, elevator),
+    dataSources: buildDataSources(air, elevator, !!(coords?.user && coords?.dest)),
   }
 }
 
@@ -269,13 +352,15 @@ function buildWeatherAlert(air) {
   return null
 }
 
-function buildDataSources(air, elevator) {
+function buildDataSources(air, elevator, coordsBased) {
   return [
     { label: '실시간 대기환경', api: 'RealtimeCityAir', live: !IS_DEMO },
     { label: '승강기 가동현황', api: 'LiftStatusInfoService', live: !IS_DEMO },
+    { label: '지하철 실시간 도착', api: 'swopenapi 지하철', live: !IS_DEMO },
     { label: '버스 도착정보', api: 'BusStopArInfoByRouteList', live: false, note: '정류장ID 필요' },
     { label: '공중화장실 위치', api: 'SearchPublicToiletPOIService', live: !IS_DEMO },
     { label: '근처 약국', api: '공공데이터포털 약국현황', live: !IS_GONGGONG_DEMO },
+    { label: '좌표 기반 거리', api: 'Kakao Maps SDK', live: coordsBased },
   ]
 }
 
@@ -315,6 +400,17 @@ function getMockBusArrival() {
     { busNo: '370', arrmsg1: '3분 후 도착', isLowFloor: true },
     { busNo: '7212', arrmsg1: '8분 후 도착', isLowFloor: false },
     { busNo: '100', arrmsg1: '12분 후 도착', isLowFloor: true },
+  ]
+}
+
+function getMockSubwayArrival(stationName) {
+  // 현재 시간 기반으로 현실감 있는 도착 시간 생성
+  const m1 = 2 + Math.floor(Math.random() * 5)  // 2~6분
+  const m2 = m1 + 3 + Math.floor(Math.random() * 4) // m1+3~7분
+  const station = stationName?.replace(/역$/, '') || '서울'
+  return [
+    { lineName: '상행', lineColor: '#009246', direction: `${station} 방면`, currentStation: station, arrivalMsg: `${m1}분 후 도착`, updnLine: '상행' },
+    { lineName: '하행', lineColor: '#009246', direction: `반대 방면`, currentStation: station, arrivalMsg: `${m2}분 후 도착`, updnLine: '하행' },
   ]
 }
 

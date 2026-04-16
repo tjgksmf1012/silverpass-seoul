@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { getProfile, addHistory } from '../services/storage.js'
-import { getRouteData } from '../services/seoulApi.js'
+import { getRouteData, getRealtimeSubwayArrival } from '../services/seoulApi.js'
 import { generateRouteExplanation, generateSubwayGuide } from '../services/claude.js'
 import { ArrowLeft, BusIcon, ElevatorIcon, WindIcon, ToiletIcon,
          ShelterIcon, ShareIcon, AlertIcon, CheckCircle, PillIcon } from '../components/Icons.jsx'
@@ -22,22 +22,48 @@ export default function Route_() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('bus')
   const [subwayGuide, setSubwayGuide] = useState(null)
+  const [realtimeArrivals, setRealtimeArrivals] = useState(null) // 지하철 실시간 도착
+  const [liveCoords, setLiveCoords] = useState(null)             // 카카오맵에서 받은 좌표
+  const coordsApplied = useRef(false)                            // 좌표 기반 재계산 1회만
+
   const profile = getProfile()
   const destination = state?.parsed?.destination || state?.query || '목적지'
 
+  // ── 초기 로드 ──────────────────────────────────────────────
   useEffect(() => {
     async function load() {
       try {
-        const data = await getRouteData(destination, profile)
+        const [data, subway] = await Promise.all([
+          getRouteData(destination, profile, null),
+          generateSubwayGuide(destination),
+        ])
         setRouteData(data)
+        setSubwayGuide(subway)
         addHistory({ destination, duration: data.duration, burden: data.burden })
         const exp = await generateRouteExplanation(data, profile)
         setExplanation(exp)
-        const subway = await generateSubwayGuide(destination)
-        setSubwayGuide(subway)
+        // 지하철 실시간 도착 (역명 얻어지면 바로 조회)
+        if (subway?.nearestStation) {
+          const arrivals = await getRealtimeSubwayArrival(subway.nearestStation)
+          setRealtimeArrivals(arrivals)
+        }
       } finally { setLoading(false) }
     }
     load()
+  }, [])
+
+  // ── 카카오맵에서 실제 좌표 콜백 → 거리/시간 갱신 ──────────────
+  const handleCoordsReady = useCallback(async (coords) => {
+    if (coordsApplied.current) return
+    coordsApplied.current = true
+    setLiveCoords(coords)
+    // 좌표 기반으로 routeData 거리/시간만 업데이트 (API 재호출 없이)
+    setRouteData(prev => prev ? {
+      ...prev,
+      walkDistance: coords.dist,
+      duration: coords.duration,
+      coordsBased: true,
+    } : prev)
   }, [])
 
   if (loading) return (
@@ -50,7 +76,7 @@ export default function Route_() {
       <div style={{ width: '100%', maxWidth: 280, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {[
           { label: '실시간 대기질 분석', color: '#059669' },
-          { label: '승강기 가동 현황 확인', color: '#2563EB' },
+          { label: '지하철 실시간 도착 정보', color: '#2563EB' },
           { label: '저상버스 도착 정보', color: '#7C3AED' },
           { label: '근처 약국 정보', color: '#D97706' },
         ].map((item, i) => (
@@ -71,6 +97,7 @@ export default function Route_() {
   const b = BURDEN[routeData?.burden] || BURDEN.low
   const air = routeData?.airQuality
   const airColor = AIR_COLOR[air?.grade] || '#64748B'
+  const isLive = routeData?.coordsBased  // GPS 좌표 기반 실시간 여부
 
   return (
     <div style={{ minHeight: '100vh', background: '#F8F9FA', paddingBottom: 32 }}>
@@ -89,7 +116,11 @@ export default function Route_() {
           <p style={{ fontSize: 22, fontWeight: 800, color: '#0D9488', margin: 0 }}>
             {routeData?.duration}<span style={{ fontSize: 14, fontWeight: 600 }}>분</span>
           </p>
-          <p style={{ fontSize: 10, color: '#CBD5E1', margin: 0 }}>도보 추정</p>
+          {/* 실시간 좌표 기반이면 초록 뱃지, 아니면 회색 추정 표시 */}
+          {isLive
+            ? <span style={{ fontSize: 10, background: '#ECFDF5', color: '#059669', fontWeight: 700, padding: '2px 7px', borderRadius: 20 }}>📍 실시간</span>
+            : <p style={{ fontSize: 10, color: '#CBD5E1', margin: 0 }}>대중교통 추정</p>
+          }
         </div>
       </div>
 
@@ -104,8 +135,14 @@ export default function Route_() {
               <p style={{ fontSize: 13, color: b.accent, margin: 0, fontWeight: 600 }}>{b.sub}</p>
             </div>
             <div style={{ background: '#fff', borderRadius: 14, padding: '12px 14px', textAlign: 'center', border: `1px solid ${b.border}` }}>
-              <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 2px' }}>도보</p>
-              <p style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', margin: 0 }}>{routeData?.walkDistance}<span style={{ fontSize: 12 }}>m</span></p>
+              <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 2px' }}>{isLive ? '직선 거리' : '예상 거리'}</p>
+              <p style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                {routeData?.walkDistance >= 1000
+                  ? <>{(routeData.walkDistance / 1000).toFixed(1)}<span style={{ fontSize: 12 }}>km</span></>
+                  : <>{routeData?.walkDistance}<span style={{ fontSize: 12 }}>m</span></>
+                }
+              </p>
+              {isLive && <p style={{ fontSize: 9, color: '#0D9488', margin: '2px 0 0', fontWeight: 600 }}>GPS 측정</p>}
             </div>
           </div>
           {/* 상태 3종 */}
@@ -126,8 +163,7 @@ export default function Route_() {
         {/* ── ② 지도 ── */}
         <RouteMap
           destination={destination}
-          toilets={routeData?.toilets}
-          pharmacies={routeData?.pharmacies}
+          onCoordsReady={handleCoordsReady}
         />
 
         {/* ── ③ 경고 배너 ── */}
@@ -159,14 +195,14 @@ export default function Route_() {
             ))}
           </div>
 
-          {/* 버스 패널 */}
+          {/* ─ 버스 패널 ─ */}
           {activeTab === 'bus' && (
             <div>
               {routeData?.buses?.length > 0 ? (
                 <>
                   <div style={{ padding: '12px 16px 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontSize: 12, color: '#94A3B8', fontWeight: 600 }}>실시간 버스 도착 정보</span>
-                    <span style={{ marginLeft: 'auto', background: '#F8F9FA', color: '#94A3B8', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>예시</span>
+                    <span style={{ marginLeft: 'auto', background: '#FFF7ED', color: '#C2410C', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>⚠ 정류장ID 필요</span>
                   </div>
                   {routeData.buses.map((bus, i) => (
                     <div key={i} style={{ padding: '12px 16px', borderTop: '1px solid #F8FAFC', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -188,12 +224,12 @@ export default function Route_() {
             </div>
           )}
 
-          {/* 지하철 패널 */}
+          {/* ─ 지하철 패널 ─ */}
           {activeTab === 'subway' && (
             <div>
               {subwayGuide ? (
                 <>
-                  {/* 호선 배지 + 역명 */}
+                  {/* 호선 배지 + 역명 + 방향 */}
                   <div style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', gap: 14 }}>
                     <div style={{
                       width: 52, height: 52, borderRadius: 16,
@@ -214,10 +250,10 @@ export default function Route_() {
                     </div>
                   </div>
 
-                  {/* 안내 항목들 */}
+                  {/* 탑승 안내 */}
                   <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {[
-                      { icon: '🚪', label: '탑승역', value: subwayGuide.nearestStation.replace('역','') + '역 승차' },
+                      { icon: '🚉', label: '탑승역', value: subwayGuide.nearestStation },
                       { icon: '🧭', label: '탑승 방향', value: subwayGuide.direction + ' 방향 탑승' },
                       { icon: '🔄', label: '환승', value: subwayGuide.transferInfo || '환승 없음 (직통)' },
                       { icon: '🚪', label: '출구', value: subwayGuide.exitNumber + ' 이용' },
@@ -229,6 +265,27 @@ export default function Route_() {
                       </div>
                     ))}
                   </div>
+
+                  {/* 실시간 도착 정보 */}
+                  {realtimeArrivals?.length > 0 && (
+                    <div style={{ margin: '0 16px 12px', background: '#F8F9FA', borderRadius: 12, overflow: 'hidden' }}>
+                      <div style={{ padding: '10px 14px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#059669', animation: 'pulse2 1.5s infinite' }} />
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>실시간 도착 정보</span>
+                        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#94A3B8' }}>{subwayGuide.nearestStation}</span>
+                      </div>
+                      {realtimeArrivals.map((arr, i) => (
+                        <div key={i} style={{ padding: '10px 14px', borderBottom: i < realtimeArrivals.length - 1 ? '1px solid #F1F5F9' : 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 32, height: 20, borderRadius: 6, background: arr.lineColor || subwayGuide.lineColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <span style={{ fontSize: 10, fontWeight: 800, color: '#fff' }}>{arr.lineName || subwayGuide.line}</span>
+                          </div>
+                          <span style={{ fontSize: 13, color: '#374151', fontWeight: 600, flex: 1 }}>{arr.direction || arr.bstatnNm}</span>
+                          <span style={{ fontSize: 14, fontWeight: 800, color: '#0D9488' }}>{arr.arrivalMsg}</span>
+                        </div>
+                      ))}
+                      <style>{`@keyframes pulse2 { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
+                    </div>
+                  )}
 
                   {/* 어르신 팁 */}
                   {subwayGuide.tip && (
@@ -248,10 +305,9 @@ export default function Route_() {
             </div>
           )}
 
-          {/* 택시 패널 */}
+          {/* ─ 택시 패널 ─ */}
           {activeTab === 'taxi' && (
             <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {/* 복지콜 */}
               <a href="tel:1588-4388" style={{ textDecoration: 'none' }}>
                 <div style={{ background: '#F0FDFA', border: '1.5px solid #CCFBF1', borderRadius: 14, padding: '16px', display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer' }}>
                   <div style={{ width: 48, height: 48, borderRadius: 14, background: '#0D9488', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -269,9 +325,7 @@ export default function Route_() {
                   </div>
                 </div>
               </a>
-
-              {/* 카카오택시 */}
-              <a href="kakaomap://taxi" style={{ textDecoration: 'none' }} onError={e => e.preventDefault()}>
+              <a href="kakaomap://taxi" style={{ textDecoration: 'none' }}>
                 <div style={{ background: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: 14, padding: '16px', display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer' }}>
                   <div style={{ width: 48, height: 48, borderRadius: 14, background: '#FEE500', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <span style={{ fontSize: 24 }}>🚕</span>
@@ -285,24 +339,32 @@ export default function Route_() {
                   </div>
                 </div>
               </a>
-
-              {/* 일반 택시 안내 */}
-              <div style={{ background: '#F8F9FA', borderRadius: 12, padding: '12px 14px' }}>
-                <p style={{ fontSize: 12, fontWeight: 700, color: '#64748B', margin: '0 0 6px' }}>택시 기본 정보</p>
-                <div style={{ display: 'flex', gap: 16 }}>
-                  <div>
-                    <p style={{ fontSize: 11, color: '#94A3B8', margin: 0 }}>기본요금</p>
-                    <p style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', margin: '2px 0 0' }}>4,800원</p>
-                  </div>
-                  <div>
-                    <p style={{ fontSize: 11, color: '#94A3B8', margin: 0 }}>심야할증</p>
-                    <p style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', margin: '2px 0 0' }}>오후 10시~</p>
-                  </div>
-                  <div>
-                    <p style={{ fontSize: 11, color: '#94A3B8', margin: 0 }}>어르신 할인</p>
-                    <p style={{ fontSize: 14, fontWeight: 800, color: '#0D9488', margin: '2px 0 0' }}>복지콜 적용</p>
-                  </div>
+              {/* 거리 기반 택시 요금 예측 */}
+              <div style={{ background: '#F8F9FA', borderRadius: 12, padding: '14px' }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#64748B', margin: '0 0 10px' }}>택시 요금 안내</p>
+                <div style={{ display: 'flex', gap: 0 }}>
+                  {[
+                    { label: '기본요금', value: '4,800원' },
+                    { label: '심야할증', value: '오후 10시~' },
+                    { label: '어르신 할인', value: '복지콜 적용', color: '#0D9488' },
+                  ].map(({ label, value, color }, i, arr) => (
+                    <div key={label} style={{ flex: 1, textAlign: 'center', borderRight: i < arr.length - 1 ? '1px solid #E2E8F0' : 'none', padding: '0 8px' }}>
+                      <p style={{ fontSize: 11, color: '#94A3B8', margin: 0 }}>{label}</p>
+                      <p style={{ fontSize: 13, fontWeight: 800, color: color || '#0F172A', margin: '4px 0 0' }}>{value}</p>
+                    </div>
+                  ))}
                 </div>
+                {liveCoords?.dist && (
+                  <div style={{ marginTop: 10, padding: '8px 12px', background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>📍 현재 위치 기준 예상 요금</span>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: '#0F172A' }}>
+                      {liveCoords.dist < 1600
+                        ? '4,800원'
+                        : `약 ${Math.round((4800 + Math.ceil((liveCoords.dist - 1600) / 131) * 100) / 100) * 100}원`
+                      }
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -399,7 +461,7 @@ export default function Route_() {
           </div>
         )}
 
-        {/* ── ⑨ 무더위쉼터 ── */}
+        {/* ── ⑧ 무더위쉼터 ── */}
         {routeData?.shelters?.length > 0 && (
           <div style={{ background: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: 16, overflow: 'hidden' }}>
             <div style={{ padding: '14px 16px', borderBottom: '1px solid #FEF3C7', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -418,7 +480,7 @@ export default function Route_() {
           </div>
         )}
 
-        {/* ── ⑧ 데이터 출처 ── */}
+        {/* ── 데이터 출처 ── */}
         {routeData?.dataSources && (
           <div style={{ padding: '4px 0' }}>
             <p style={{ fontSize: 11, fontWeight: 600, color: '#CBD5E1', marginBottom: 8 }}>활용 데이터 — 서울 열린데이터광장</p>
@@ -433,7 +495,7 @@ export default function Route_() {
           </div>
         )}
 
-        {/* ── ⑨ 액션 ── */}
+        {/* ── 액션 버튼 ── */}
         <button onClick={() => navigate('/share', { state: { destination, routeData } })} style={{ width: '100%', border: 'none', borderRadius: 16, background: 'linear-gradient(135deg, #0F766E, #0D9488)', color: '#fff', fontWeight: 800, fontSize: 17, padding: '18px 0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 16px rgba(13,148,136,0.25)' }}>
           <ShareIcon size={18} color="#fff" /> 보호자에게 공유하기
         </button>

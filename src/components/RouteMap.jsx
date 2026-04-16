@@ -1,6 +1,7 @@
 /**
  * RouteMap — 카카오맵 기반 경로 지도
  * Kakao Maps JS SDK v2 (libraries=services 포함)
+ * onCoordsReady({ user, dest }) 콜백으로 실제 좌표 전달
  */
 import { useEffect, useRef, useState } from 'react'
 
@@ -12,19 +13,11 @@ let sdkPromise = null
 function loadKakaoSDK() {
   if (sdkPromise) return sdkPromise
   sdkPromise = new Promise((resolve, reject) => {
-    // 이미 로드된 경우
     if (window.kakao?.maps?.services) { resolve(); return }
-
     const script = document.createElement('script')
-    // autoload=false → kakao.maps.load() 콜백 후 사용 가능
     script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_KEY}&libraries=services&autoload=false`
-    script.onload = () => {
-      window.kakao.maps.load(() => resolve())
-    }
-    script.onerror = () => {
-      sdkPromise = null // 실패 시 재시도 허용
-      reject(new Error('카카오맵 SDK 로드 실패'))
-    }
+    script.onload = () => { window.kakao.maps.load(() => resolve()) }
+    script.onerror = () => { sdkPromise = null; reject(new Error('카카오맵 SDK 로드 실패')) }
     document.head.appendChild(script)
   })
   return sdkPromise
@@ -78,11 +71,25 @@ function myOverlayHtml() {
   `
 }
 
-export default function RouteMap({ destination }) {
+// ─── 두 점 잇는 점선 폴리라인 ────────────────────────────────
+function drawDashedLine(kakao, map, from, to) {
+  return new kakao.maps.Polyline({
+    map,
+    path: [from, to],
+    strokeWeight: 3,
+    strokeColor: '#0D9488',
+    strokeOpacity: 0.6,
+    strokeStyle: 'shortdash',
+  })
+}
+
+export default function RouteMap({ destination, onCoordsReady }) {
   const mapDivRef  = useRef(null)
   const mapRef     = useRef(null)
-  const overlayRef = useRef([]) // 정리용 오버레이 목록
-  const [status, setStatus] = useState('loading') // loading | ready | error | nokey
+  const overlayRef = useRef([])
+  const polylineRef = useRef(null)
+  const [status, setStatus] = useState('loading')
+  const [distInfo, setDistInfo] = useState(null) // {dist, duration}
 
   useEffect(() => {
     if (!mapDivRef.current) return
@@ -96,10 +103,10 @@ export default function RouteMap({ destination }) {
         const { kakao } = window
 
         // ── 지도 초기화 ──────────────────────────────────────
-        // 이미 map이 있으면 제거 후 재생성 (React StrictMode 대응)
         if (mapRef.current) {
           overlayRef.current.forEach(o => o.setMap(null))
           overlayRef.current = []
+          if (polylineRef.current) { polylineRef.current.setMap(null); polylineRef.current = null }
           mapRef.current = null
           mapDivRef.current.innerHTML = ''
         }
@@ -110,7 +117,7 @@ export default function RouteMap({ destination }) {
         })
         mapRef.current = map
 
-        // ── 목적지 검색 (Kakao Keyword Search) ──────────────
+        // ── 목적지 검색 ──────────────────────────────────────
         const ps = new kakao.maps.services.Places()
         ps.keywordSearch(
           `서울 ${destination}`,
@@ -121,14 +128,12 @@ export default function RouteMap({ destination }) {
             }
 
             const place = data[0]
-            const destLatLng = new kakao.maps.LatLng(
-              parseFloat(place.y),
-              parseFloat(place.x)
-            )
+            const destLat = parseFloat(place.y)
+            const destLng = parseFloat(place.x)
+            const destLatLng = new kakao.maps.LatLng(destLat, destLng)
             map.setCenter(destLatLng)
             map.setLevel(4)
 
-            // 목적지 오버레이
             const destOverlay = new kakao.maps.CustomOverlay({
               position: destLatLng,
               content: destOverlayHtml(destination),
@@ -156,11 +161,34 @@ export default function RouteMap({ destination }) {
                 myOverlay.setMap(map)
                 overlayRef.current.push(myOverlay)
 
-                // 현재 위치 + 목적지 모두 보이도록 범위 조정
+                // 두 점 잇는 점선
+                polylineRef.current = drawDashedLine(kakao, map, myLatLng, destLatLng)
+
+                // 두 마커 모두 보이도록 범위 조정
                 const bounds = new kakao.maps.LatLngBounds()
                 bounds.extend(myLatLng)
                 bounds.extend(destLatLng)
                 map.setBounds(bounds, 60, 60, 60, 60)
+
+                // ── 좌표 기반 직선거리 계산 ─────────────────
+                const R = 6371000
+                const toRad = d => d * Math.PI / 180
+                const dLat = toRad(destLat - lat)
+                const dLon = toRad(destLng - lon)
+                const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat)) * Math.cos(toRad(destLat)) * Math.sin(dLon/2)**2
+                const straight = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+                const dist = Math.round(straight * 1.35) // 도시 우회 보정
+                const duration = Math.max(8, Math.min(Math.ceil(dist / 1000 / 20 * 60) + 5 + Math.ceil(dist / 1000), 90))
+
+                setDistInfo({ dist, duration })
+
+                // 부모 컴포넌트로 실제 좌표 전달
+                onCoordsReady?.({
+                  user: { lat, lng: lon },
+                  dest: { lat: destLat, lng: destLng },
+                  dist,
+                  duration,
+                })
               },
               () => {},
               { timeout: 5000 }
@@ -175,9 +203,9 @@ export default function RouteMap({ destination }) {
 
     return () => {
       cancelled = true
-      // 오버레이 정리 (지도 자체는 DOM 재사용을 위해 유지)
       overlayRef.current.forEach(o => { try { o.setMap(null) } catch {} })
       overlayRef.current = []
+      if (polylineRef.current) { try { polylineRef.current.setMap(null) } catch {} polylineRef.current = null }
     }
   }, [destination])
 
@@ -198,6 +226,19 @@ export default function RouteMap({ destination }) {
           <circle cx="12" cy="10" r="3"/>
         </svg>
         <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0 }}>지도</p>
+
+        {/* 거리 정보 뱃지 (좌표 계산 완료 시) */}
+        {distInfo && (
+          <div style={{ marginLeft: 8, display: 'flex', gap: 6 }}>
+            <span style={{ background: '#F0FDFA', color: '#0D9488', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, border: '1px solid #CCFBF1' }}>
+              📍 {distInfo.dist < 1000 ? `${distInfo.dist}m` : `${(distInfo.dist/1000).toFixed(1)}km`}
+            </span>
+            <span style={{ background: '#EFF6FF', color: '#2563EB', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, border: '1px solid #DBEAFE' }}>
+              🕐 약 {distInfo.duration}분
+            </span>
+          </div>
+        )}
+
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#0D9488', border: '2px solid #fff', boxShadow: '0 0 0 1px #0D9488' }} />
@@ -214,7 +255,6 @@ export default function RouteMap({ destination }) {
       <div style={{ position: 'relative' }}>
         <div ref={mapDivRef} style={{ height: 220 }} />
 
-        {/* 로딩 오버레이 */}
         {status === 'loading' && (
           <div style={{
             position: 'absolute', inset: 0, background: '#F8F9FA',
@@ -230,7 +270,6 @@ export default function RouteMap({ destination }) {
           </div>
         )}
 
-        {/* 앱키 없음 안내 */}
         {status === 'nokey' && (
           <div style={{
             position: 'absolute', inset: 0, background: '#F8F9FA',
@@ -242,7 +281,6 @@ export default function RouteMap({ destination }) {
           </div>
         )}
 
-        {/* 오류 안내 */}
         {status === 'error' && (
           <div style={{
             position: 'absolute', inset: 0, background: '#F8F9FA',
