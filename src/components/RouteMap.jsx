@@ -1,139 +1,201 @@
 /**
- * RouteMap — Leaflet + OpenStreetMap 기반 경로 지도
- * API키 불필요, 완전 무료
+ * RouteMap — 카카오맵 기반 경로 지도
+ * Kakao Maps JS SDK v2 (libraries=services 포함)
  */
 import { useEffect, useRef, useState } from 'react'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
 
-// Vite에서 Leaflet 기본 아이콘 경로 오류 방지 (divIcon 사용하므로 불필요하지만 보험)
-delete L.Icon.Default.prototype._getIconUrl
+const KAKAO_KEY = import.meta.env.VITE_KAKAO_MAP_KEY
+const SEOUL_CENTER = { lat: 37.5665, lng: 126.9780 }
 
-const SEOUL_CENTER = [37.5665, 126.9780]
+// ─── 카카오맵 SDK 동적 로드 (중복 로드 방지) ───────────────────
+let sdkPromise = null
+function loadKakaoSDK() {
+  if (sdkPromise) return sdkPromise
+  sdkPromise = new Promise((resolve, reject) => {
+    // 이미 로드된 경우
+    if (window.kakao?.maps?.services) { resolve(); return }
 
-/** Nominatim으로 서울 내 장소 좌표 검색 */
-async function geocodeInSeoul(query) {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent('서울 ' + query)}&format=json&countrycodes=kr&limit=1&accept-language=ko`,
-      { headers: { 'User-Agent': 'SilverPassSeoulCare/1.0' } }
-    )
-    const data = await res.json()
-    if (data[0]) return [parseFloat(data[0].lat), parseFloat(data[0].lon)]
-  } catch {}
-  return null
-}
-
-/** 마커 div 아이콘 생성 헬퍼 */
-function makeIcon(color, size = 16) {
-  return L.divIcon({
-    html: `<div style="
-      width:${size}px;height:${size}px;
-      background:${color};border-radius:50%;
-      border:3px solid #fff;
-      box-shadow:0 2px 6px rgba(0,0,0,0.25)
-    "></div>`,
-    className: '',
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
+    const script = document.createElement('script')
+    // autoload=false → kakao.maps.load() 콜백 후 사용 가능
+    script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_KEY}&libraries=services&autoload=false`
+    script.onload = () => {
+      window.kakao.maps.load(() => resolve())
+    }
+    script.onerror = () => {
+      sdkPromise = null // 실패 시 재시도 허용
+      reject(new Error('카카오맵 SDK 로드 실패'))
+    }
+    document.head.appendChild(script)
   })
+  return sdkPromise
 }
 
-/** 목적지 핀 (물방울 모양) */
-function makeDestIcon() {
-  return L.divIcon({
-    html: `<div style="
-      width:28px;height:28px;
-      background:#0D9488;
-      border-radius:50% 50% 50% 0;
-      transform:rotate(-45deg);
-      border:3px solid #fff;
-      box-shadow:0 3px 10px rgba(13,148,136,0.4)
-    "></div>`,
-    className: '',
-    iconSize: [28, 28],
-    iconAnchor: [14, 28],
-  })
+// ─── 목적지 커스텀 마커 HTML ─────────────────────────────────
+function destOverlayHtml(name) {
+  return `
+    <div style="
+      display:flex;flex-direction:column;align-items:center;
+      filter:drop-shadow(0 3px 6px rgba(13,148,136,0.35));
+    ">
+      <div style="
+        background:#0D9488;color:#fff;
+        font-size:12px;font-weight:700;font-family:'Pretendard Variable','맑은 고딕',sans-serif;
+        padding:5px 10px;border-radius:20px;white-space:nowrap;
+        border:2px solid #fff;
+      ">${name}</div>
+      <div style="
+        width:0;height:0;
+        border-left:7px solid transparent;
+        border-right:7px solid transparent;
+        border-top:10px solid #0D9488;
+        margin-top:-1px;
+      "></div>
+    </div>
+  `
 }
 
-export default function RouteMap({ destination, toilets = [], pharmacies = [] }) {
-  const mapDivRef = useRef(null)
-  const mapRef = useRef(null)
-  const [status, setStatus] = useState('loading') // loading | ready | error
+// ─── 현재위치 커스텀 마커 HTML ───────────────────────────────
+function myOverlayHtml() {
+  return `
+    <div style="
+      display:flex;flex-direction:column;align-items:center;
+      filter:drop-shadow(0 2px 4px rgba(37,99,235,0.4));
+    ">
+      <div style="
+        background:#2563EB;color:#fff;
+        font-size:11px;font-weight:700;font-family:'Pretendard Variable','맑은 고딕',sans-serif;
+        padding:4px 9px;border-radius:20px;
+        border:2px solid #fff;
+      ">현재 위치</div>
+      <div style="
+        width:0;height:0;
+        border-left:6px solid transparent;
+        border-right:6px solid transparent;
+        border-top:8px solid #2563EB;
+        margin-top:-1px;
+      "></div>
+    </div>
+  `
+}
+
+export default function RouteMap({ destination }) {
+  const mapDivRef  = useRef(null)
+  const mapRef     = useRef(null)
+  const overlayRef = useRef([]) // 정리용 오버레이 목록
+  const [status, setStatus] = useState('loading') // loading | ready | error | nokey
 
   useEffect(() => {
-    if (!mapDivRef.current || mapRef.current) return
+    if (!mapDivRef.current) return
+    if (!KAKAO_KEY) { setStatus('nokey'); return }
 
-    const map = L.map(mapDivRef.current, {
-      center: SEOUL_CENTER,
-      zoom: 13,
-      zoomControl: true,
-      attributionControl: true,
-      scrollWheelZoom: false, // 모바일에서 실수 방지
-    })
-    mapRef.current = map
+    let cancelled = false
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '© OpenStreetMap',
-    }).addTo(map)
+    loadKakaoSDK()
+      .then(() => {
+        if (cancelled || !mapDivRef.current) return
+        const { kakao } = window
 
-    let destCoords = null
-
-    // 1. 목적지 지오코딩
-    geocodeInSeoul(destination)
-      .then(coords => {
-        destCoords = coords || SEOUL_CENTER
-        map.setView(destCoords, 15)
-
-        L.marker(destCoords, { icon: makeDestIcon() })
-          .addTo(map)
-          .bindPopup(`<b style="font-size:14px">${destination}</b><br><span style="color:#64748B;font-size:12px">목적지</span>`)
-          .openPopup()
-
-        setStatus('ready')
-      })
-      .catch(() => setStatus('error'))
-
-    // 2. 현재 위치 표시 (한국 좌표 범위 내일 때만)
-    navigator.geolocation?.getCurrentPosition(
-      pos => {
-        if (!mapRef.current) return
-        const { latitude: lat, longitude: lon } = pos.coords
-
-        // 한국 위경도 범위 벗어나면 GPS 핀 표시 안 함
-        // (서울 외 지역에서 앱 테스트 시 지도가 해외로 날아가는 버그 방지)
-        const inKorea = lat >= 33.0 && lat <= 38.7 && lon >= 124.5 && lon <= 131.0
-        if (!inKorea) return
-
-        const myLatLng = [lat, lon]
-
-        L.marker(myLatLng, { icon: makeIcon('#2563EB', 18) })
-          .addTo(map)
-          .bindPopup('<b style="font-size:13px">현재 위치</b>')
-
-        // 현재 위치 ↔ 목적지 모두 보이도록 줌 조정
-        if (destCoords) {
-          const bounds = L.latLngBounds([myLatLng, destCoords])
-          map.fitBounds(bounds, { padding: [40, 40] })
+        // ── 지도 초기화 ──────────────────────────────────────
+        // 이미 map이 있으면 제거 후 재생성 (React StrictMode 대응)
+        if (mapRef.current) {
+          overlayRef.current.forEach(o => o.setMap(null))
+          overlayRef.current = []
+          mapRef.current = null
+          mapDivRef.current.innerHTML = ''
         }
-      },
-      () => {}, // 위치 거부 시 무시
-      { timeout: 5000 }
-    )
+
+        const map = new kakao.maps.Map(mapDivRef.current, {
+          center: new kakao.maps.LatLng(SEOUL_CENTER.lat, SEOUL_CENTER.lng),
+          level: 5,
+        })
+        mapRef.current = map
+
+        // ── 목적지 검색 (Kakao Keyword Search) ──────────────
+        const ps = new kakao.maps.services.Places()
+        ps.keywordSearch(
+          `서울 ${destination}`,
+          (data, searchStatus) => {
+            if (cancelled || !mapRef.current) return
+            if (searchStatus !== kakao.maps.services.Status.OK || !data.length) {
+              setStatus('error'); return
+            }
+
+            const place = data[0]
+            const destLatLng = new kakao.maps.LatLng(
+              parseFloat(place.y),
+              parseFloat(place.x)
+            )
+            map.setCenter(destLatLng)
+            map.setLevel(4)
+
+            // 목적지 오버레이
+            const destOverlay = new kakao.maps.CustomOverlay({
+              position: destLatLng,
+              content: destOverlayHtml(destination),
+              yAnchor: 1.0,
+            })
+            destOverlay.setMap(map)
+            overlayRef.current.push(destOverlay)
+
+            setStatus('ready')
+
+            // ── GPS 현재 위치 ─────────────────────────────
+            navigator.geolocation?.getCurrentPosition(
+              pos => {
+                if (cancelled || !mapRef.current) return
+                const { latitude: lat, longitude: lon } = pos.coords
+                const inKorea = lat >= 33.0 && lat <= 38.7 && lon >= 124.5 && lon <= 131.0
+                if (!inKorea) return
+
+                const myLatLng = new kakao.maps.LatLng(lat, lon)
+                const myOverlay = new kakao.maps.CustomOverlay({
+                  position: myLatLng,
+                  content: myOverlayHtml(),
+                  yAnchor: 1.0,
+                })
+                myOverlay.setMap(map)
+                overlayRef.current.push(myOverlay)
+
+                // 현재 위치 + 목적지 모두 보이도록 범위 조정
+                const bounds = new kakao.maps.LatLngBounds()
+                bounds.extend(myLatLng)
+                bounds.extend(destLatLng)
+                map.setBounds(bounds, 60, 60, 60, 60)
+              },
+              () => {},
+              { timeout: 5000 }
+            )
+          },
+          { location: new kakao.maps.LatLng(SEOUL_CENTER.lat, SEOUL_CENTER.lng), radius: 20000 }
+        )
+      })
+      .catch(() => {
+        if (!cancelled) setStatus('error')
+      })
 
     return () => {
-      map.remove()
-      mapRef.current = null
+      cancelled = true
+      // 오버레이 정리 (지도 자체는 DOM 재사용을 위해 유지)
+      overlayRef.current.forEach(o => { try { o.setMap(null) } catch {} })
+      overlayRef.current = []
     }
   }, [destination])
 
   return (
-    <div style={{ background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+    <div style={{
+      background: '#fff', border: '1.5px solid #F1F5F9',
+      borderRadius: 16, overflow: 'hidden',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+    }}>
       {/* 헤더 */}
-      <div style={{ padding: '13px 16px', borderBottom: '1px solid #F8FAFC', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#0F172A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
+      <div style={{
+        padding: '13px 16px', borderBottom: '1px solid #F8FAFC',
+        display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        <svg width={16} height={16} viewBox="0 0 24 24" fill="none"
+          stroke="#0F172A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+          <circle cx="12" cy="10" r="3"/>
         </svg>
         <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0 }}>지도</p>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -151,18 +213,49 @@ export default function RouteMap({ destination, toilets = [], pharmacies = [] })
       {/* 지도 영역 */}
       <div style={{ position: 'relative' }}>
         <div ref={mapDivRef} style={{ height: 220 }} />
+
+        {/* 로딩 오버레이 */}
         {status === 'loading' && (
-          <div style={{ position: 'absolute', inset: 0, background: '#F8F9FA', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #E2E8F0', borderTopColor: '#0D9488', animation: 'spin 0.8s linear infinite' }} />
+          <div style={{
+            position: 'absolute', inset: 0, background: '#F8F9FA',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          }}>
+            <div style={{
+              width: 20, height: 20, borderRadius: '50%',
+              border: '2px solid #E2E8F0', borderTopColor: '#0D9488',
+              animation: 'spin 0.8s linear infinite',
+            }} />
             <span style={{ fontSize: 13, color: '#94A3B8' }}>지도 불러오는 중…</span>
             <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          </div>
+        )}
+
+        {/* 앱키 없음 안내 */}
+        {status === 'nokey' && (
+          <div style={{
+            position: 'absolute', inset: 0, background: '#F8F9FA',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}>
+            <span style={{ fontSize: 13, color: '#94A3B8' }}>VITE_KAKAO_MAP_KEY 미설정</span>
+            <span style={{ fontSize: 11, color: '#CBD5E1' }}>.env 파일에 카카오 앱키를 추가해주세요</span>
+          </div>
+        )}
+
+        {/* 오류 안내 */}
+        {status === 'error' && (
+          <div style={{
+            position: 'absolute', inset: 0, background: '#F8F9FA',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <span style={{ fontSize: 13, color: '#94A3B8' }}>장소를 찾을 수 없어요</span>
           </div>
         )}
       </div>
 
       {/* 출처 */}
       <div style={{ padding: '8px 14px', borderTop: '1px solid #F8FAFC' }}>
-        <p style={{ fontSize: 11, color: '#CBD5E1', margin: 0 }}>지도 데이터 © OpenStreetMap contributors</p>
+        <p style={{ fontSize: 11, color: '#CBD5E1', margin: 0 }}>지도 © Kakao</p>
       </div>
     </div>
   )
