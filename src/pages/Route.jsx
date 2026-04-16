@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { getProfile, addHistory } from '../services/storage.js'
 import { getRouteData } from '../services/seoulApi.js'
-import { generateRouteExplanation } from '../services/claude.js'
+import { generateRouteExplanation, generateSubwayGuide } from '../services/claude.js'
 import { ArrowLeft, BusIcon, ElevatorIcon, WindIcon, ToiletIcon,
          ShelterIcon, ShareIcon, AlertIcon, CheckCircle, PillIcon } from '../components/Icons.jsx'
 import RouteMap from '../components/RouteMap.jsx'
@@ -20,6 +20,8 @@ export default function Route_() {
   const [routeData, setRouteData] = useState(null)
   const [explanation, setExplanation] = useState('')
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('bus')
+  const [subwayGuide, setSubwayGuide] = useState(null)
   const profile = getProfile()
   const destination = state?.parsed?.destination || state?.query || '목적지'
 
@@ -31,6 +33,8 @@ export default function Route_() {
         addHistory({ destination, duration: data.duration, burden: data.burden })
         const exp = await generateRouteExplanation(data, profile)
         setExplanation(exp)
+        const subway = await generateSubwayGuide(destination)
+        setSubwayGuide(subway)
       } finally { setLoading(false) }
     }
     load()
@@ -134,23 +138,175 @@ export default function Route_() {
           </div>
         )}
 
-        {/* ── ③ 버스 도착 ── */}
-        {routeData?.buses?.length > 0 && (
-          <div style={{ background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid #F8FAFC', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <BusIcon size={16} color="#0F172A" />
-              <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0 }}>실시간 버스 도착</p>
-              <span style={{ marginLeft: 'auto', background: '#F8F9FA', color: '#94A3B8', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20 }}>예시</span>
-            </div>
-            {routeData.buses.map((bus, i) => (
-              <div key={i} style={{ padding: '14px 16px', borderBottom: i < routeData.buses.length - 1 ? '1px solid #F8FAFC' : 'none', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ background: bus.isLowFloor ? '#0D9488' : '#374151', color: '#fff', fontWeight: 800, fontSize: 14, padding: '6px 12px', borderRadius: 10, minWidth: 52, textAlign: 'center' }}>{bus.busNo}</span>
-                {bus.isLowFloor && <span style={{ background: '#F0FDFA', color: '#0D9488', fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20 }}>저상 ♿</span>}
-                <span style={{ marginLeft: 'auto', fontWeight: 700, fontSize: 15, color: '#0F172A' }}>{bus.arrmsg1}</span>
-              </div>
+        {/* ── ③ 이동수단 탭 ── */}
+        <div style={{ background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          {/* 탭 헤더 */}
+          <div style={{ display: 'flex', borderBottom: '1px solid #F1F5F9' }}>
+            {[
+              { id: 'bus',    label: '🚌 버스' },
+              { id: 'subway', label: '🚇 지하철' },
+              { id: 'taxi',   label: '🚕 택시' },
+            ].map(tab => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+                flex: 1, padding: '13px 4px', border: 'none', background: 'none', cursor: 'pointer',
+                fontSize: 14, fontWeight: activeTab === tab.id ? 800 : 600,
+                color: activeTab === tab.id ? '#0D9488' : '#94A3B8',
+                borderBottom: activeTab === tab.id ? '2.5px solid #0D9488' : '2.5px solid transparent',
+                transition: 'all 0.15s',
+              }}>
+                {tab.label}
+              </button>
             ))}
           </div>
-        )}
+
+          {/* 버스 패널 */}
+          {activeTab === 'bus' && (
+            <div>
+              {routeData?.buses?.length > 0 ? (
+                <>
+                  <div style={{ padding: '12px 16px 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 12, color: '#94A3B8', fontWeight: 600 }}>실시간 버스 도착 정보</span>
+                    <span style={{ marginLeft: 'auto', background: '#F8F9FA', color: '#94A3B8', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>예시</span>
+                  </div>
+                  {routeData.buses.map((bus, i) => (
+                    <div key={i} style={{ padding: '12px 16px', borderTop: '1px solid #F8FAFC', display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ background: bus.isLowFloor ? '#0D9488' : '#374151', color: '#fff', fontWeight: 800, fontSize: 14, padding: '6px 12px', borderRadius: 10, minWidth: 52, textAlign: 'center' }}>{bus.busNo}</span>
+                      {bus.isLowFloor && <span style={{ background: '#F0FDFA', color: '#0D9488', fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20 }}>저상 ♿</span>}
+                      <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                        <p style={{ fontWeight: 700, fontSize: 15, color: '#0F172A', margin: 0 }}>{bus.arrmsg1}</p>
+                        <p style={{ fontSize: 11, color: '#94A3B8', margin: '2px 0 0' }}>다음 버스</p>
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ padding: '10px 16px', borderTop: '1px solid #F8FAFC', background: '#F8F9FA' }}>
+                    <p style={{ fontSize: 11, color: '#94A3B8', margin: 0 }}>💡 초록색 버스는 저상버스(휠체어·유모차 이용 가능)예요</p>
+                  </div>
+                </>
+              ) : (
+                <div style={{ padding: '24px 16px', textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>버스 정보를 불러오는 중이에요</div>
+              )}
+            </div>
+          )}
+
+          {/* 지하철 패널 */}
+          {activeTab === 'subway' && (
+            <div>
+              {subwayGuide ? (
+                <>
+                  {/* 호선 배지 + 역명 */}
+                  <div style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{
+                      width: 52, height: 52, borderRadius: 16,
+                      background: subwayGuide.lineColor,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0, boxShadow: `0 4px 12px ${subwayGuide.lineColor}55`,
+                    }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>서울</span>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.1 }}>{subwayGuide.line}</span>
+                    </div>
+                    <div>
+                      <p style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', margin: 0 }}>{subwayGuide.nearestStation}</p>
+                      <p style={{ fontSize: 13, color: '#64748B', margin: '2px 0 0', fontWeight: 600 }}>하차 후 {subwayGuide.walkFromExit}</p>
+                    </div>
+                    <div style={{ marginLeft: 'auto', textAlign: 'right', background: subwayGuide.lineColor + '15', borderRadius: 12, padding: '8px 12px', border: `1px solid ${subwayGuide.lineColor}30` }}>
+                      <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 2px', fontWeight: 600 }}>방향</p>
+                      <p style={{ fontSize: 14, fontWeight: 800, color: subwayGuide.lineColor, margin: 0 }}>{subwayGuide.direction}</p>
+                    </div>
+                  </div>
+
+                  {/* 안내 항목들 */}
+                  <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {[
+                      { icon: '🚪', label: '탑승역', value: subwayGuide.nearestStation.replace('역','') + '역 승차' },
+                      { icon: '🧭', label: '탑승 방향', value: subwayGuide.direction + ' 방향 탑승' },
+                      { icon: '🔄', label: '환승', value: subwayGuide.transferInfo || '환승 없음 (직통)' },
+                      { icon: '🚪', label: '출구', value: subwayGuide.exitNumber + ' 이용' },
+                    ].map(({ icon, label, value }) => (
+                      <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#F8F9FA', borderRadius: 12, padding: '10px 14px' }}>
+                        <span style={{ fontSize: 16 }}>{icon}</span>
+                        <span style={{ fontSize: 12, color: '#94A3B8', fontWeight: 600, minWidth: 48 }}>{label}</span>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{value}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 어르신 팁 */}
+                  {subwayGuide.tip && (
+                    <div style={{ margin: '0 16px 14px', background: '#F0FDFA', border: '1px solid #CCFBF1', borderRadius: 12, padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                      <span style={{ fontSize: 16 }}>♿</span>
+                      <p style={{ fontSize: 13, color: '#0F766E', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>{subwayGuide.tip}</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ padding: '24px 16px', textAlign: 'center' }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', border: '3px solid #E2E8F0', borderTopColor: '#0D9488', animation: 'spin 0.8s linear infinite', margin: '0 auto 10px' }} />
+                  <p style={{ fontSize: 14, color: '#94A3B8', margin: 0 }}>지하철 경로 분석 중…</p>
+                  <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 택시 패널 */}
+          {activeTab === 'taxi' && (
+            <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* 복지콜 */}
+              <a href="tel:1588-4388" style={{ textDecoration: 'none' }}>
+                <div style={{ background: '#F0FDFA', border: '1.5px solid #CCFBF1', borderRadius: 14, padding: '16px', display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer' }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 14, background: '#0D9488', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.26 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.17 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                    </svg>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', margin: 0 }}>서울시 어르신 콜택시</p>
+                    <p style={{ fontSize: 13, color: '#0D9488', fontWeight: 700, margin: '2px 0 0' }}>☎ 1588-4388</p>
+                    <p style={{ fontSize: 11, color: '#64748B', margin: '3px 0 0' }}>65세 이상 · 24시간 운영 · 저렴한 요금</p>
+                  </div>
+                  <div style={{ background: '#0D9488', borderRadius: 10, padding: '6px 12px' }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>전화</span>
+                  </div>
+                </div>
+              </a>
+
+              {/* 카카오택시 */}
+              <a href="kakaomap://taxi" style={{ textDecoration: 'none' }} onError={e => e.preventDefault()}>
+                <div style={{ background: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: 14, padding: '16px', display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer' }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 14, background: '#FEE500', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ fontSize: 24 }}>🚕</span>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', margin: 0 }}>카카오택시</p>
+                    <p style={{ fontSize: 12, color: '#92400E', margin: '3px 0 0' }}>앱에서 바로 호출하세요</p>
+                  </div>
+                  <div style={{ background: '#FEE500', borderRadius: 10, padding: '6px 12px' }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: '#000' }}>열기</span>
+                  </div>
+                </div>
+              </a>
+
+              {/* 일반 택시 안내 */}
+              <div style={{ background: '#F8F9FA', borderRadius: 12, padding: '12px 14px' }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#64748B', margin: '0 0 6px' }}>택시 기본 정보</p>
+                <div style={{ display: 'flex', gap: 16 }}>
+                  <div>
+                    <p style={{ fontSize: 11, color: '#94A3B8', margin: 0 }}>기본요금</p>
+                    <p style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', margin: '2px 0 0' }}>4,800원</p>
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 11, color: '#94A3B8', margin: 0 }}>심야할증</p>
+                    <p style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', margin: '2px 0 0' }}>오후 10시~</p>
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 11, color: '#94A3B8', margin: 0 }}>어르신 할인</p>
+                    <p style={{ fontSize: 14, fontWeight: 800, color: '#0D9488', margin: '2px 0 0' }}>복지콜 적용</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* ── ④ 대기질 ── */}
         {air && (

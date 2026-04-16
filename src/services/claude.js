@@ -111,6 +111,79 @@ export async function generateRouteExplanation(routeData, profile) {
   }
 }
 
+export async function generateSubwayGuide(destination) {
+  if (!client) return getMockSubwayGuide(destination)
+
+  const systemPrompt = `당신은 서울 지하철 안내 전문가입니다.
+목적지가 주어지면 지하철로 가는 가장 현실적인 방법을 JSON으로만 반환하세요. 마크다운 코드블록 절대 사용 금지.
+
+JSON 형식:
+{
+  "nearestStation": "내릴 역명 (예: 종로3가역)",
+  "line": "호선 (예: 3호선)",
+  "lineNumber": 3,
+  "lineColor": "#hex",
+  "direction": "방향 (예: 대화행)",
+  "transferInfo": "환승 안내 (없으면 null)",
+  "exitNumber": "출구 번호 (예: 5번 출구)",
+  "walkFromExit": "출구에서 도보 시간 (예: 도보 3분)",
+  "tip": "어르신을 위한 팁 한 줄 (예: 엘리베이터는 3번 출구에 있어요)"
+}
+
+서울 지하철 노선 색상:
+1호선 #0052A4, 2호선 #009246, 3호선 #EF7C1C, 4호선 #00A5DE,
+5호선 #996CAC, 6호선 #CD7C2F, 7호선 #747F00, 8호선 #E6186C,
+9호선 #BDB092, 경의중앙선 #77C4A3, 수인분당선 #F5A200,
+신분당선 #D4003B, 우이신설선 #B0CE2C`
+
+  try {
+    const res = await client.messages.create({
+      model: MODEL,
+      max_tokens: 300,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: `서울 ${destination}까지 지하철로 가는 방법을 알려주세요.` }],
+    })
+    const text = res.content[0].text.trim()
+    const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
+    return JSON.parse(cleaned)
+  } catch (err) {
+    console.error('Subway guide error:', err)
+    return getMockSubwayGuide(destination)
+  }
+}
+
+function getMockSubwayGuide(destination) {
+  const dest = destination.toLowerCase()
+  // 목적지에 따라 현실적인 mock 데이터 반환
+  if (dest.includes('강남') || dest.includes('역삼') || dest.includes('삼성')) {
+    return { nearestStation: '강남역', line: '2호선', lineNumber: 2, lineColor: '#009246', direction: '성수행', transferInfo: null, exitNumber: '11번 출구', walkFromExit: '도보 3분', tip: '11번 출구에 엘리베이터가 있어요' }
+  }
+  if (dest.includes('홍대') || dest.includes('마포')) {
+    return { nearestStation: '홍대입구역', line: '2호선', lineNumber: 2, lineColor: '#009246', direction: '까치산행', transferInfo: null, exitNumber: '9번 출구', walkFromExit: '도보 5분', tip: '경의중앙선·공항철도로 환승 가능해요' }
+  }
+  if (dest.includes('명동') || dest.includes('을지로')) {
+    return { nearestStation: '명동역', line: '4호선', lineNumber: 4, lineColor: '#00A5DE', direction: '당고개행', transferInfo: null, exitNumber: '6번 출구', walkFromExit: '도보 2분', tip: '6번 출구 앞에 엘리베이터 있어요' }
+  }
+  if (dest.includes('종로') || dest.includes('광화문') || dest.includes('청계')) {
+    return { nearestStation: '종각역', line: '1호선', lineNumber: 1, lineColor: '#0052A4', direction: '청량리행', transferInfo: null, exitNumber: '4번 출구', walkFromExit: '도보 4분', tip: '에스컬레이터 이용 가능해요' }
+  }
+  if (dest.includes('이태원') || dest.includes('한남') || dest.includes('용산')) {
+    return { nearestStation: '이태원역', line: '6호선', lineNumber: 6, lineColor: '#CD7C2F', direction: '봉화산행', transferInfo: null, exitNumber: '2번 출구', walkFromExit: '도보 3분', tip: '2번 출구 바로 앞이에요' }
+  }
+  // 기본값
+  return {
+    nearestStation: '서울역',
+    line: '1호선',
+    lineNumber: 1,
+    lineColor: '#0052A4',
+    direction: '청량리행',
+    transferInfo: '4호선 환승 가능',
+    exitNumber: '7번 출구',
+    walkFromExit: '도보 약 5분',
+    tip: '엘리베이터는 1번 출구를 이용하세요',
+  }
+}
+
 function getMockRouteRecommendation(query, profile) {
   const q = query.toLowerCase()
   let destination = '목적지'
