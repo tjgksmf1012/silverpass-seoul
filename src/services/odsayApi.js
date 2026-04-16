@@ -9,7 +9,7 @@
  * (등록된 도메인: localhost:5173, silverpass-seoul.vercel.app)
  */
 
-const API_KEY = import.meta.env.VITE_ODSAY_API_KEY
+const API_KEY = import.meta.env.VITE_ODSAY_API_KEY?.trim()
 const BASE = 'https://api.odsay.com/v1/api'
 
 // trafficType 숫자 → 텍스트
