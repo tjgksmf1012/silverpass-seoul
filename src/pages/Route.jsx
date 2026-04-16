@@ -82,7 +82,10 @@ export default function Route_() {
         </div>
         <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
           <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>예상 시간</p>
-          <p style={{ fontSize: 22, fontWeight: 800, color: '#0D9488', margin: 0 }}>{routeData?.duration}<span style={{ fontSize: 14, fontWeight: 600 }}>분</span></p>
+          <p style={{ fontSize: 22, fontWeight: 800, color: '#0D9488', margin: 0 }}>
+            {routeData?.duration}<span style={{ fontSize: 14, fontWeight: 600 }}>분</span>
+          </p>
+          <p style={{ fontSize: 10, color: '#CBD5E1', margin: 0 }}>도보 추정</p>
         </div>
       </div>
 
