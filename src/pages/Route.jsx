@@ -5,7 +5,7 @@ import { getRouteData, getRealtimeSubwayArrival } from '../services/seoulApi.js'
 import { generateRouteExplanation, generateSubwayGuide } from '../services/claude.js'
 import { searchTransitRoute, getRealtimeBusInfo, formatArrivalTime, pathTypeIcon } from '../services/odsayApi.js'
 import { ArrowLeft, BusIcon, ElevatorIcon, WindIcon,
-         ShelterIcon, ShareIcon } from '../components/Icons.jsx'
+         ShelterIcon, ShareIcon, AlertIcon } from '../components/Icons.jsx'
 import RouteMap from '../components/RouteMap.jsx'
 
 const BURDEN = {
