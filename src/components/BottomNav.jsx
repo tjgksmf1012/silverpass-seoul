@@ -1,10 +1,10 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import { HomeIcon, UserIcon, ShareIcon } from './Icons.jsx'
+import { HomeIcon, UserIcon, AlertIcon } from './Icons.jsx'
 
 const items = [
-  { path: '/',        label: '홈',    Icon: HomeIcon  },
-  { path: '/profile', label: '프로필', Icon: UserIcon  },
-  { path: '/share',   label: '공유',   Icon: ShareIcon },
+  { path: '/',          label: '홈',     Icon: HomeIcon,  activeColor: '#0D9488', activeBg: '#F0FDFA' },
+  { path: '/profile',   label: '내정보',  Icon: UserIcon,  activeColor: '#0D9488', activeBg: '#F0FDFA' },
+  { path: '/emergency', label: '응급',   Icon: AlertIcon, activeColor: '#DC2626', activeBg: '#FEF2F2' },
 ]
 
 export default function BottomNav() {
@@ -15,13 +15,13 @@ export default function BottomNav() {
     <nav style={{
       position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)',
       width: '100%', maxWidth: 480,
-      background: 'rgba(255,255,255,0.96)',
+      background: 'rgba(255,255,255,0.97)',
       backdropFilter: 'blur(16px)',
       borderTop: '1px solid #F1F5F9',
       display: 'flex', justifyContent: 'space-around',
       padding: '10px 0 22px', zIndex: 50,
     }}>
-      {items.map(({ path, label, Icon }) => {
+      {items.map(({ path, label, Icon, activeColor, activeBg }) => {
         const active = pathname === path
         return (
           <button key={path} onClick={() => navigate(path)} style={{
@@ -31,13 +31,17 @@ export default function BottomNav() {
           }}>
             <div style={{
               width: 44, height: 30, borderRadius: 10,
-              background: active ? '#F0FDFA' : 'transparent',
+              background: active ? activeBg : 'transparent',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               transition: 'background 0.2s',
             }}>
-              <Icon size={20} color={active ? '#0D9488' : '#94A3B8'} />
+              <Icon size={20} color={active ? activeColor : '#94A3B8'} />
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: active ? '#0D9488' : '#94A3B8', transition: 'color 0.2s' }}>
+            <span style={{
+              fontSize: 11, fontWeight: 700,
+              color: active ? activeColor : '#94A3B8',
+              transition: 'color 0.2s',
+            }}>
               {label}
             </span>
           </button>

@@ -4,8 +4,8 @@ import { getProfile, addHistory } from '../services/storage.js'
 import { getRouteData, getRealtimeSubwayArrival } from '../services/seoulApi.js'
 import { generateRouteExplanation, generateSubwayGuide } from '../services/claude.js'
 import { searchTransitRoute, getRealtimeBusInfo, formatArrivalTime, pathTypeIcon } from '../services/odsayApi.js'
-import { ArrowLeft, BusIcon, ElevatorIcon, WindIcon, ToiletIcon,
-         ShelterIcon, ShareIcon, AlertIcon, CheckCircle, PillIcon } from '../components/Icons.jsx'
+import { ArrowLeft, BusIcon, ElevatorIcon, WindIcon,
+         ShelterIcon, ShareIcon } from '../components/Icons.jsx'
 import RouteMap from '../components/RouteMap.jsx'
 
 const BURDEN = {
@@ -553,56 +553,6 @@ export default function Route_() {
           </div>
         )}
 
-        {/* ── 공중화장실 ── */}
-        {routeData?.toilets?.length > 0 && (
-          <div style={{ background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid #F8FAFC', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <ToiletIcon size={16} color="#0F172A" />
-              <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0 }}>가까운 공중화장실</p>
-            </div>
-            {routeData.toilets.map((t, i) => (
-              <div key={i} style={{ padding: '13px 16px', borderBottom: i < routeData.toilets.length - 1 ? '1px solid #F8FAFC' : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: '#F0FDFA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <ToiletIcon size={16} color="#0D9488" />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</p>
-                  {t.address && <p style={{ fontSize: 12, color: '#94A3B8', margin: '2px 0 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.address}</p>}
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <span style={{ background: '#F8F9FA', color: '#64748B', fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20 }}>{t.openHour}</span>
-                    {t.hasDisabled && <span style={{ background: '#F0FDFA', color: '#0D9488', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20 }}>♿ 장애인용</span>}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ── 근처 약국 ── */}
-        {routeData?.pharmacies?.length > 0 && (
-          <div style={{ background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid #F8FAFC', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <PillIcon size={16} color="#0F172A" />
-              <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0 }}>근처 약국</p>
-            </div>
-            {routeData.pharmacies.map((p, i) => (
-              <div key={i} style={{ padding: '13px 16px', borderBottom: i < routeData.pharmacies.length - 1 ? '1px solid #F8FAFC' : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <PillIcon size={16} color="#059669" />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</p>
-                  {p.address && <p style={{ fontSize: 12, color: '#94A3B8', margin: '2px 0 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.address}</p>}
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <span style={{ background: '#F8F9FA', color: '#64748B', fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20 }}>{p.hours}</span>
-                    {p.tel && <a href={`tel:${p.tel}`} style={{ background: '#ECFDF5', color: '#059669', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, textDecoration: 'none' }}>{p.tel}</a>}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* ── 무더위쉼터 ── */}
         {routeData?.shelters?.length > 0 && (
           <div style={{ background: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: 16, overflow: 'hidden' }}>
@@ -622,32 +572,9 @@ export default function Route_() {
           </div>
         )}
 
-        {/* ── 데이터 출처 ── */}
-        {routeData?.dataSources && (
-          <div style={{ padding: '4px 0' }}>
-            <p style={{ fontSize: 11, fontWeight: 600, color: '#CBD5E1', marginBottom: 8 }}>활용 공공 데이터</p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {routeData.dataSources.map((src, i) => (
-                <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, background: src.live ? '#F0FDFA' : '#F8F9FA', color: src.live ? '#0D9488' : '#94A3B8', fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 20, border: `1px solid ${src.live ? '#CCFBF1' : '#E2E8F0'}` }}>
-                  {src.live ? <CheckCircle size={11} color="#0D9488" /> : <span style={{ width: 8, height: 8, borderRadius: '50%', border: '1.5px solid #CBD5E1', display: 'inline-block' }} />}
-                  {src.label}
-                </span>
-              ))}
-              {transitRoutes && (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#F0FDFA', color: '#0D9488', fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 20, border: '1px solid #CCFBF1' }}>
-                  <CheckCircle size={11} color="#0D9488" /> ODsay 실시간 경로
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── 액션 버튼 ── */}
+        {/* ── 공유 버튼 ── */}
         <button onClick={() => navigate('/share', { state: { destination, routeData } })} style={{ width: '100%', border: 'none', borderRadius: 16, background: 'linear-gradient(135deg, #0F766E, #0D9488)', color: '#fff', fontWeight: 800, fontSize: 17, padding: '18px 0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 16px rgba(13,148,136,0.25)' }}>
           <ShareIcon size={18} color="#fff" /> 보호자에게 공유하기
-        </button>
-        <button onClick={() => navigate('/emergency')} style={{ width: '100%', border: '1.5px solid #FECACA', borderRadius: 16, background: '#fff', color: '#DC2626', fontWeight: 800, fontSize: 17, padding: '18px 0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          <AlertIcon size={18} color="#DC2626" /> 응급 상황
         </button>
       </div>
     </div>
