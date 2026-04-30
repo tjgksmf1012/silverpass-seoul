@@ -27,12 +27,12 @@ const GREETING =
   HOUR < 22 ? '좋은 저녁이에요' : '밤에도 안전하게'
 
 const FAV_CONFIG = {
-  복지관: { Icon: BuildingIcon, bg: '#F5F3FF', iconColor: '#7C3AED' },
-  병원:   { Icon: HospitalIcon, bg: '#EFF6FF', iconColor: '#2563EB' },
-  약국:   { Icon: PillIcon,     bg: '#ECFDF5', iconColor: '#059669' },
-  집:     { Icon: HomeIcon,     bg: '#FFFBEB', iconColor: '#D97706' },
+  복지관: { Icon: BuildingIcon, grad: 'linear-gradient(135deg,#A78BFA,#7C3AED)', shadow: 'rgba(124,58,237,0.35)' },
+  병원:   { Icon: HospitalIcon, grad: 'linear-gradient(135deg,#60A5FA,#2563EB)', shadow: 'rgba(37,99,235,0.35)'  },
+  약국:   { Icon: PillIcon,     grad: 'linear-gradient(135deg,#34D399,#059669)', shadow: 'rgba(5,150,105,0.35)'  },
+  집:     { Icon: HomeIcon,     grad: 'linear-gradient(135deg,#FCD34D,#D97706)', shadow: 'rgba(217,119,6,0.35)'  },
 }
-const DEFAULT_FAV = { Icon: MapPin, bg: '#F0FDFA', iconColor: '#0D9488' }
+const DEFAULT_FAV = { Icon: MapPin, grad: 'linear-gradient(135deg,#5EEAD4,#0D9488)', shadow: 'rgba(13,148,136,0.35)' }
 
 const BURDEN_BADGE = {
   low:    { bg: '#ECFDF5', text: '#065F46', label: '쉬움' },
@@ -230,7 +230,7 @@ export default function Home() {
         {/* 자주 가는 곳 */}
         <div>
           <p style={{ fontSize: 13, fontWeight: 700, color: '#64748B', margin: '0 0 10px', letterSpacing: '0.03em' }}>자주 가는 곳</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             {profile.favorites.map(fav => {
               const cfg = FAV_CONFIG[fav.name] || DEFAULT_FAV
               const { Icon } = cfg
@@ -238,27 +238,32 @@ export default function Home() {
                 <button
                   key={fav.id} onClick={() => handleSearch(fav.name)} disabled={loading}
                   style={{
-                    background: '#fff', border: '1.5px solid #F1F5F9',
-                    borderRadius: 16, padding: '15px 13px',
-                    display: 'flex', alignItems: 'center', gap: 11,
-                    cursor: 'pointer', textAlign: 'left',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                    flex: 1, border: 'none', background: '#fff',
+                    borderRadius: 18, padding: '16px 6px 14px',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.07)',
                     transition: 'transform 0.12s',
                   }}
-                  onTouchStart={e => { e.currentTarget.style.transform = 'scale(0.97)' }}
+                  onTouchStart={e => { e.currentTarget.style.transform = 'scale(0.91)' }}
                   onTouchEnd={e   => { e.currentTarget.style.transform = 'scale(1)' }}
-                  onMouseDown={e  => { e.currentTarget.style.transform = 'scale(0.97)' }}
+                  onMouseDown={e  => { e.currentTarget.style.transform = 'scale(0.91)' }}
                   onMouseUp={e    => { e.currentTarget.style.transform = 'scale(1)' }}
                 >
-                  <div style={{ width: 42, height: 42, borderRadius: 12, background: cfg.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Icon size={20} color={cfg.iconColor} />
+                  <div style={{
+                    width: 52, height: 52, borderRadius: 16,
+                    background: cfg.grad,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: `0 6px 14px ${cfg.shadow}`,
+                  }}>
+                    <Icon size={24} color="#fff" />
                   </div>
-                  <div style={{ minWidth: 0 }}>
-                    <p style={{ fontWeight: 800, fontSize: 15, color: '#0F172A', margin: 0 }}>{fav.name}</p>
-                    <p style={{ color: fav.address ? '#64748B' : '#CBD5E1', fontSize: 12, margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {fav.address || '탭해서 이동'}
-                    </p>
-                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: '#1E293B', letterSpacing: '-0.01em' }}>{fav.name}</span>
+                  {fav.address && (
+                    <span style={{ fontSize: 10, color: '#94A3B8', maxWidth: '90%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: -4 }}>
+                      {fav.address}
+                    </span>
+                  )}
                 </button>
               )
             })}
