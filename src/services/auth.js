@@ -32,7 +32,7 @@ export async function signInWithEmail(email, password) {
   if (error) throw new Error(error.message)
   const id = data.user.id
   const name = data.user.user_metadata?.name || '사용자'
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', id).single()
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', id).maybeSingle()
   if (profile?.role) localStorage.setItem(ROLE_KEY, profile.role)
   const user = { id, name, thumbnail: '', provider: 'email' }
   saveLocalUser(user)
@@ -51,7 +51,7 @@ export async function signIn() {
         { onConflict: 'id', ignoreDuplicates: true }
       )
       .select()
-      .single()
+      .maybeSingle()
 
     if (data?.role) {
       localStorage.setItem(ROLE_KEY, data.role)
@@ -105,7 +105,7 @@ export async function connectWithCode(guardianId, code) {
     .from('links')
     .select('*, user:profiles!links_user_id_fkey(*)')
     .eq('invite_code', code.toUpperCase())
-    .single()
+    .maybeSingle()
 
   if (error || !link) throw new Error('유효하지 않은 코드예요')
   if (link.guardian_id) throw new Error('이미 다른 보호자와 연결된 코드예요')
@@ -126,7 +126,7 @@ export async function getLinkedUser(guardianId) {
     .from('links')
     .select('*, user:profiles!links_user_id_fkey(*)')
     .eq('guardian_id', guardianId)
-    .single()
+    .maybeSingle()
 
   return data?.user || null
 }
@@ -139,7 +139,7 @@ export async function getLinkedGuardian(userId) {
     .from('links')
     .select('*, guardian:profiles!links_guardian_id_fkey(*)')
     .eq('user_id', userId)
-    .single()
+    .maybeSingle()
 
   return data?.guardian || null
 }
@@ -161,7 +161,7 @@ export async function joinAsUser(inviteCode, userName = null) {
     .from('links')
     .select('*')
     .eq('invite_code', inviteCode.toUpperCase())
-    .single()
+    .maybeSingle()
 
   if (error || !link) throw new Error('유효하지 않은 초대 코드예요')
 
@@ -171,7 +171,7 @@ export async function joinAsUser(inviteCode, userName = null) {
       .from('profiles')
       .select('*')
       .eq('id', link.user_id)
-      .single()
+      .maybeSingle()
 
     // 사용된 재로그인 코드 삭제 (원본 링크는 유지)
     if (link.is_relogin) {
@@ -267,7 +267,7 @@ export async function getElderInfo(elderId) {
     .from('profiles')
     .select('home_address, frequent_places, notes, phone, district, max_walk_min, allow_stairs, mobility_aid')
     .eq('id', elderId)
-    .single()
+    .maybeSingle()
 
   return data || null
 }
@@ -279,7 +279,7 @@ export async function syncGuardianProfileFromSupabase(guardianId) {
     .from('profiles')
     .select('phone, name')
     .eq('id', guardianId)
-    .single()
+    .maybeSingle()
   if (!data) return
 
   const { getProfile, saveProfile } = await import('./storage.js')
