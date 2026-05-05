@@ -37,6 +37,9 @@ export default defineConfig({
       workbox: {
         // 핵심 파일 사전 캐싱
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         // API 요청은 캐시하지 않음 (실시간 데이터)
         navigateFallback: 'index.html',
         runtimeCaching: [

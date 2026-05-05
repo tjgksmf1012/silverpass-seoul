@@ -227,7 +227,21 @@ export async function generateReloginCode(guardianId, elderId) {
 // 사용자 이동 기록 저장
 export async function saveHistory(userId, { destination, burden, duration }) {
   if (!supabase || !hasRemoteProfile(userId)) return
-  await supabase.from('history').insert({ user_id: userId, destination, burden, duration })
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (profileError || !profile) return
+
+  const { error } = await supabase
+    .from('history')
+    .insert({ user_id: userId, destination, burden, duration })
+
+  if (error) {
+    console.warn('History save skipped:', error.message)
+  }
 }
 
 // 보호자가 연결된 사용자의 이동 기록 조회
