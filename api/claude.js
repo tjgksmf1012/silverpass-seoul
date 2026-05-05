@@ -51,15 +51,25 @@ function normalizeQueryResult(data, query, profile = {}) {
   const fallback = getFallbackQueryResult(query, profile)
   if (!data || typeof data !== 'object') return fallback
 
+  const rawDestination = String(data.destination || '').trim()
+  const unknownDestinations = ['알 수 없음', 'unknown', '미상', '불명', '목적지']
+  const destination = !rawDestination || unknownDestinations.includes(rawDestination.toLowerCase())
+    ? fallback.destination
+    : rawDestination
+  const allowedTypes = ['hospital', 'pharmacy', 'welfare', 'home', 'other']
+  const destinationType = fallback.destinationType !== 'other'
+    ? fallback.destinationType
+    : (allowedTypes.includes(data.destinationType) ? data.destinationType : 'other')
+  const aiPreferences = Array.isArray(data.preferences)
+    ? data.preferences.map(item => String(item)).filter(Boolean)
+    : []
+  const preferences = [...new Set([...fallback.preferences, ...aiPreferences])].slice(0, 5)
+
   return {
-    destination: String(data.destination || fallback.destination),
-    destinationType: ['hospital', 'pharmacy', 'welfare', 'home', 'other'].includes(data.destinationType)
-      ? data.destinationType
-      : fallback.destinationType,
-    urgency: data.urgency === 'urgent' ? 'urgent' : fallback.urgency,
-    preferences: Array.isArray(data.preferences) && data.preferences.length
-      ? data.preferences.map(item => String(item)).slice(0, 5)
-      : fallback.preferences,
+    destination,
+    destinationType,
+    urgency: data.urgency === 'urgent' || fallback.urgency === 'urgent' ? 'urgent' : 'normal',
+    preferences,
   }
 }
 
@@ -69,9 +79,17 @@ function getFallbackQueryResult(query = '', profile = {}) {
   let destination = q || '목적지'
   let destinationType = 'other'
 
-  if (lower.includes('병원') || lower.includes('의원')) destinationType = 'hospital'
-  else if (lower.includes('약국')) destinationType = 'pharmacy'
-  else if (lower.includes('복지관') || lower.includes('센터')) destinationType = 'welfare'
+  const district = q.match(/([가-힣]+구)/)?.[1]
+  if (lower.includes('병원') || lower.includes('의원')) {
+    destination = district ? `${district} 병원` : '근처 병원'
+    destinationType = 'hospital'
+  } else if (lower.includes('약국')) {
+    destination = district ? `${district} 약국` : '근처 약국'
+    destinationType = 'pharmacy'
+  } else if (lower.includes('복지관') || lower.includes('센터')) {
+    destination = district ? `${district} 복지시설` : '근처 복지시설'
+    destinationType = 'welfare'
+  }
   else if (lower.includes('집') || lower.includes('귀가')) {
     destination = '집'
     destinationType = 'home'
@@ -93,6 +111,12 @@ function getFallbackQueryResult(query = '', profile = {}) {
 function normalizeSubwayGuide(data, destination = '') {
   const fallback = getFallbackSubwayGuide(destination)
   if (!data || typeof data !== 'object') return fallback
+
+  const station = String(data.nearestStation || '')
+  const fallbackStationStem = fallback.nearestStation.replace(/역$/, '')
+  if (fallback.nearestStation !== '서울역' && !station.includes(fallbackStationStem)) {
+    return fallback
+  }
 
   const lineNumber = Number.parseInt(data.lineNumber, 10)
   const lineColor = typeof data.lineColor === 'string' && /^#[0-9a-f]{6}$/i.test(data.lineColor)
