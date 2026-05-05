@@ -92,12 +92,32 @@ npm install
 # .env 파일 생성
 cp .env.example .env
 # 아래 키 입력:
-# VITE_ANTHROPIC_API_KEY=
-# VITE_SEOUL_API_KEY=
-# VITE_GONGGONG_API_KEY=
+# ANTHROPIC_API_KEY=        # 서버 전용, 브라우저 번들에 포함하지 않음
+# VITE_SEOUL_API_KEY=       # 로컬 Vite 직접 호출용
+# VITE_GONGGONG_API_KEY=    # 로컬 Vite 직접 호출용
+# VITE_KAKAO_MAP_KEY=
+# VITE_ODSAY_API_KEY=
+# VITE_SUPABASE_URL=
+# VITE_SUPABASE_ANON_KEY=
 
 npm run dev
 ```
+
+## Vercel 환경변수
+
+Production 배포에는 아래 서버 전용 키를 Vercel Project Settings > Environment Variables에 등록합니다.
+
+```bash
+ANTHROPIC_API_KEY=
+SEOUL_API_KEY=
+GONGGONG_API_KEY=
+VITE_KAKAO_MAP_KEY=
+VITE_ODSAY_API_KEY=
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+```
+
+AI 호출은 `/api/claude` 서버리스 프록시를 통해 처리되므로 Anthropic 키가 브라우저 JS 번들에 노출되지 않습니다.
 
 ## 작업 후 저장
 

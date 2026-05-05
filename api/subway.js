@@ -25,12 +25,34 @@ export default async function handler(req, res) {
     const resp = await fetch(url, { signal: controller.signal })
     clearTimeout(timeout)
 
-    if (!resp.ok) return res.status(502).json({ error: `Seoul Subway API ${resp.status}` })
+    if (!resp.ok) {
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({
+        _demo: true,
+        reason: `Seoul Subway API HTTP ${resp.status}`,
+      })
+    }
 
     const data = await resp.json()
+    if (data?.status && String(data.status) !== '200') {
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({
+        _demo: true,
+        reason: data.message || `Seoul Subway API status ${data.status}`,
+      })
+    }
+    if (data?.errorMessage?.status && String(data.errorMessage.status) !== '200') {
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({
+        _demo: true,
+        reason: data.errorMessage.message || `Seoul Subway API status ${data.errorMessage.status}`,
+      })
+    }
+
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60')
     res.json(data)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    res.setHeader('Cache-Control', 'no-store')
+    res.status(200).json({ _demo: true, reason: e.message })
   }
 }

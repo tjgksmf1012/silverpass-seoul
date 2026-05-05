@@ -9,6 +9,8 @@
  *   numOfRows: 결과 개수
  */
 export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+
   const { type, Q0 = '서울특별시', Q1 = '종로구', numOfRows = '5' } = req.query
 
   const key = process.env.GONGGONG_API_KEY
@@ -36,14 +38,27 @@ export default async function handler(req, res) {
     clearTimeout(timeout)
 
     if (!resp.ok) {
-      return res.status(502).json({ error: `Gonggong API HTTP ${resp.status}` })
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({
+        _demo: true,
+        reason: `Gonggong API HTTP ${resp.status}`,
+      })
     }
 
     const data = await resp.json()
+    const header = data?.response?.header
+    if (header?.resultCode && header.resultCode !== '00') {
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({
+        _demo: true,
+        reason: header.resultMsg || `Gonggong API result ${header.resultCode}`,
+      })
+    }
+
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600')
-    res.setHeader('Access-Control-Allow-Origin', '*')
     res.json(data)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    res.setHeader('Cache-Control', 'no-store')
+    res.status(200).json({ _demo: true, reason: e.message })
   }
 }

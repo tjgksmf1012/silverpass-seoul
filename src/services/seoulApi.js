@@ -159,7 +159,7 @@ export async function getNearbyPharmacies(district = '종로구') {
     name: r.dutyName || '약국',
     address: r.dutyAddr || '',
     tel: r.dutyTel1 || '',
-    hours: r.dutyTime1s ? `${r.dutyTime1s?.slice(0,2)}:${r.dutyTime1s?.slice(2,4)}~${r.dutyTime1c?.slice(0,2)}:${r.dutyTime1c?.slice(2,4)}` : '영업시간 확인 필요',
+    hours: formatDutyHours(r.dutyTime1s, r.dutyTime1c),
   }))
 }
 
@@ -233,6 +233,13 @@ function subwayLineColor(id) {
     '1063':'#77C4A3','1065':'#0065B3','1067':'#179CEE','1075':'#F5A200',
     '1077':'#D4003B','1092':'#B0CE2C' }
   return map[id] || '#64748B'
+}
+
+function formatDutyHours(open, close) {
+  if (!open || !close) return '영업시간 확인 필요'
+  const openText = String(open).padStart(4, '0')
+  const closeText = String(close).padStart(4, '0')
+  return `${openText.slice(0, 2)}:${openText.slice(2, 4)}~${closeText.slice(0, 2)}:${closeText.slice(2, 4)}`
 }
 
 // ─── 두 좌표 간 실제 지상 거리 계산 (하버사인 + 도시 보정 1.35) ───────────────

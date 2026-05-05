@@ -4,7 +4,9 @@
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "functions": {
+    "api/claude.js": { "maxDuration": 20 },
     "api/seoul.js": { "maxDuration": 10 },
-    "api/gonggong.js": { "maxDuration": 15 }
+    "api/gonggong.js": { "maxDuration": 15 },
+    "api/subway.js": { "maxDuration": 10 }
   }
 }
