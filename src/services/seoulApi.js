@@ -10,9 +10,9 @@
  */
 
 const SEOUL_KEY = import.meta.env.VITE_SEOUL_API_KEY || 'DEMO'
-const IS_DEMO = SEOUL_KEY === 'DEMO'
+const HAS_SEOUL_CLIENT_KEY = SEOUL_KEY !== 'DEMO'
 const GONGGONG_KEY = import.meta.env.VITE_GONGGONG_API_KEY || ''
-const IS_GONGGONG_DEMO = !GONGGONG_KEY
+const HAS_GONGGONG_CLIENT_KEY = Boolean(GONGGONG_KEY)
 
 // 서버사이드 프록시(Vercel function) vs 브라우저 직접 호출
 // HTTP 환경(로컬 Vite dev)에서는 직접 호출 가능
@@ -26,7 +26,7 @@ const DIRECT_BASE = `http://openapi.seoul.go.kr:8088/${SEOUL_KEY}/json`
  * 서울 OpenAPI 호출 (DEMO 키이면 null 반환 → mock 사용)
  */
 async function seoulFetch(service, start = 1, end = 10, ...pathExtras) {
-  if (IS_DEMO) return null
+  if (!USE_PROXY && !HAS_SEOUL_CLIENT_KEY) return null
 
   try {
     let url
@@ -120,7 +120,7 @@ export async function getHeatShelters(district = '종로구') {
 
 // ─── 공공데이터포털 호출 헬퍼 ────────────────────────────────────────────────────
 async function gonggongFetch(type, district = '종로구', numOfRows = 5) {
-  if (IS_GONGGONG_DEMO) return null
+  if (!USE_PROXY && !HAS_GONGGONG_CLIENT_KEY) return null
 
   try {
     let url
@@ -180,7 +180,8 @@ export async function getNearbyEmergencyHospitals(district = '종로구') {
 
 // ─── 지하철 실시간 도착정보 (swopenapi.seoul.go.kr) ──────────────────────────
 export async function getRealtimeSubwayArrival(stationName) {
-  if (!stationName || IS_DEMO) return getMockSubwayArrival(stationName)
+  if (!stationName) return getMockSubwayArrival(stationName)
+  if (!USE_PROXY && !HAS_SEOUL_CLIENT_KEY) return getMockSubwayArrival(stationName)
 
   try {
     const name = encodeURIComponent(stationName.replace(/역$/, ''))
@@ -264,7 +265,8 @@ export function calcTransitDuration(distanceM) {
 // ─── 버스 도착정보 ─────────────────────────────────────────────────────────────
 // 정류소 ID(arsId)가 없으면 실시간 호출 불가 → 현실적인 mock 사용
 export async function getBusArrival(arsId = null) {
-  if (!arsId || IS_DEMO) return getMockBusArrival()
+  if (!arsId) return getMockBusArrival()
+  if (!USE_PROXY && !HAS_SEOUL_CLIENT_KEY) return getMockBusArrival()
 
   const data = await seoulFetch('BusStopArInfoByRouteList', 1, 10, arsId)
   const rows = data?.BusStopArInfoByRouteList?.row
@@ -360,13 +362,16 @@ function buildWeatherAlert(air) {
 }
 
 function buildDataSources(air, elevator, coordsBased) {
+  const hasSeoulApi = USE_PROXY || HAS_SEOUL_CLIENT_KEY
+  const hasGonggongApi = USE_PROXY || HAS_GONGGONG_CLIENT_KEY
+
   return [
-    { label: '실시간 대기환경', api: 'RealtimeCityAir', live: !IS_DEMO },
-    { label: '승강기 가동현황', api: 'LiftStatusInfoService', live: !IS_DEMO },
-    { label: '지하철 실시간 도착', api: 'swopenapi 지하철', live: !IS_DEMO },
+    { label: '실시간 대기환경', api: 'RealtimeCityAir', live: hasSeoulApi },
+    { label: '승강기 가동현황', api: 'LiftStatusInfoService', live: hasSeoulApi },
+    { label: '지하철 실시간 도착', api: 'swopenapi 지하철', live: hasSeoulApi },
     { label: '버스 도착정보', api: 'BusStopArInfoByRouteList', live: false, note: '정류장ID 필요' },
-    { label: '공중화장실 위치', api: 'SearchPublicToiletPOIService', live: !IS_DEMO },
-    { label: '근처 약국', api: '공공데이터포털 약국현황', live: !IS_GONGGONG_DEMO },
+    { label: '공중화장실 위치', api: 'SearchPublicToiletPOIService', live: hasSeoulApi },
+    { label: '근처 약국', api: '공공데이터포털 약국현황', live: hasGonggongApi },
     { label: '좌표 기반 거리', api: 'Kakao Maps SDK', live: coordsBased },
   ]
 }
