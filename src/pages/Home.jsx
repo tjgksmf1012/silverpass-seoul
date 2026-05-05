@@ -310,43 +310,6 @@ export default function Home() {
           </button>
         )}
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-          gap: 10,
-        }}>
-          {[
-            { label: '공기', value: airNow?.grade || '확인 중', color: airNow?.airAlert ? '#DC2626' : '#0D9488', bg: airNow?.airAlert ? '#FEF2F2' : '#F0FDFA' },
-            { label: '도보', value: `${profile.maxWalkMin || 20}분`, color: '#2563EB', bg: '#EFF6FF' },
-            { label: '응급', value: '119', color: '#DC2626', bg: '#FEF2F2' },
-          ].map(item => (
-            <div key={item.label} style={{
-              background: '#fff',
-              border: '1.5px solid #E2E8F0',
-              borderRadius: 16,
-              padding: '13px 10px',
-              minHeight: 82,
-              boxShadow: '0 1px 4px rgba(15,23,42,0.05)',
-            }}>
-              <p style={{ margin: '0 0 7px', fontSize: 13, fontWeight: 800, color: '#64748B' }}>{item.label}</p>
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minHeight: 32,
-                padding: '5px 10px',
-                borderRadius: 12,
-                background: item.bg,
-                color: item.color,
-                fontSize: 17,
-                fontWeight: 900,
-              }}>
-                {item.value}
-              </span>
-            </div>
-          ))}
-        </div>
-
         {/* 보호자 등록 빠른 목적지 */}
         {(() => {
           const favDests = (profile.favorites || [])
