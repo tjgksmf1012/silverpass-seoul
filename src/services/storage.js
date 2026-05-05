@@ -24,6 +24,7 @@ export const DEFAULT_PROFILE = {
   maxWalkMin: 20,
   allowStairs: false,
   mobilityAid: false,
+  healthNotes: '',
   favorites: DEFAULT_FAVORITES,
 }
 

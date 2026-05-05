@@ -338,6 +338,7 @@ export async function syncElderProfileFromSupabase(elderId) {
     ...(info.allow_stairs  != null && { allowStairs: info.allow_stairs }),
     ...(info.mobility_aid  != null && { mobilityAid: info.mobility_aid }),
     ...(info.phone         && { guardianPhone: info.phone }),
+    ...(info.notes         && { healthNotes: info.notes }),
     ...(syncedFavorites    && { favorites: syncedFavorites }),
   })
 }

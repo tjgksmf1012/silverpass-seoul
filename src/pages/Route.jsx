@@ -29,6 +29,7 @@ export default function Route_() {
   const [realtimeBus, setRealtimeBus]     = useState(null)  // ODsay 버스 실시간
   const [liveCoords, setLiveCoords]       = useState(null)
   const [selectedRoute, setSelectedRoute] = useState(0)     // 선택된 경로 인덱스
+  const [healthNotes, setHealthNotes]     = useState('')
   const coordsApplied = useRef(false)
 
   const profile = getProfile()
@@ -43,7 +44,9 @@ export default function Route_() {
       try {
         const user = getCurrentUser()
         const elderInfo = user ? await getElderInfo(user.id) : null
-        const profileWithNotes = { ...profile, healthNotes: elderInfo?.notes || '' }
+        const notes = elderInfo?.notes || profile.healthNotes || ''
+        setHealthNotes(notes)
+        const profileWithNotes = { ...profile, healthNotes: notes }
 
         const [data, subway] = await Promise.all([
           getRouteData(destination, profileWithNotes, null),
@@ -128,6 +131,38 @@ export default function Route_() {
   const airColor = AIR_COLOR[air?.grade] || '#64748B'
   const isLive = routeData?.coordsBased
   const bestRoute = transitRoutes?.[selectedRoute]
+  const primaryTime = bestRoute?.totalTime || routeData?.duration
+  const primaryWalk = bestRoute?.totalWalk ?? routeData?.walkDistance
+  const memo = healthNotes.trim()
+  const memoShort = memo.length > 48 ? `${memo.slice(0, 48)}...` : memo
+
+  const formatDistance = (meters) => {
+    if (meters == null) return '-'
+    return meters >= 1000 ? `${(meters / 1000).toFixed(1)}km` : `${meters}m`
+  }
+
+  const firstRouteStep = (() => {
+    const step = bestRoute?.steps?.find(s => s.type === 'bus' || s.type === 'subway') || bestRoute?.steps?.[0]
+    if (step?.type === 'bus') {
+      const line = step.lines?.[0]?.busNo
+      return `${step.startStationName || step.startName || '가까운 정류장'}에서 ${line ? `${line}번 ` : ''}버스를 타세요`
+    }
+    if (step?.type === 'subway') {
+      const line = step.lines?.[0]?.name || subwayGuide?.line || '지하철'
+      return `${step.startName || subwayGuide?.nearestStation || '가까운 역'}에서 ${line}을 타세요`
+    }
+    const firstLowBus = routeData?.buses?.find(bus => bus.isLowFloor)
+    if (firstLowBus?.busNo) return `${firstLowBus.busNo}번 저상버스를 확인하세요`
+    if (routeData?.lowFloorBus) return '저상버스를 먼저 확인하세요'
+    if (subwayGuide?.nearestStation) return `${subwayGuide.nearestStation} 지하철 경로도 준비됐어요`
+    return '버스, 지하철, 택시 중 고르세요'
+  })()
+
+  const quickChecks = [
+    { label: routeData?.lowFloorBus ? '저상버스 있음' : '저상버스 확인 필요', ok: routeData?.lowFloorBus },
+    { label: routeData?.elevator ? '승강기 정상' : '승강기 점검 가능', ok: routeData?.elevator },
+    { label: air?.grade ? `대기질 ${air.grade}` : '대기질 확인 중', ok: !air?.airAlert },
+  ]
 
   return (
     <div style={{ minHeight: '100vh', background: '#F3F7FA', paddingBottom: 128 }}>
@@ -158,8 +193,47 @@ export default function Route_() {
 
       <div style={{ padding: '16px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
+        {/* ── ① 경로 우선 안내 ── */}
+        <div style={{ order: 1, background: '#fff', border: '2px solid #99F6E4', borderRadius: 22, padding: '20px', boxShadow: '0 10px 24px rgba(13,148,136,0.10)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+            <span style={{ background: '#0D9488', color: '#fff', fontSize: 13, fontWeight: 900, padding: '6px 10px', borderRadius: 999 }}>추천 경로</span>
+            <span style={{ color: isLive || bestRoute ? '#059669' : '#64748B', background: isLive || bestRoute ? '#ECFDF5' : '#F8FAFC', fontSize: 12, fontWeight: 900, padding: '5px 9px', borderRadius: 999 }}>
+              {bestRoute ? '실시간 경로' : isLive ? 'GPS 반영' : '기본 안내'}
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 14, alignItems: 'center' }}>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 14, color: '#64748B', fontWeight: 800, margin: '0 0 5px' }}>먼저 이렇게 가세요</p>
+              <p style={{ fontSize: 24, fontWeight: 950, color: '#0F172A', lineHeight: 1.3, margin: 0 }}>{firstRouteStep}</p>
+            </div>
+            <div style={{ minWidth: 86, borderRadius: 18, background: '#F0FDFA', border: '1px solid #CCFBF1', padding: '12px 10px', textAlign: 'center' }}>
+              <p style={{ fontSize: 12, color: '#0F766E', fontWeight: 900, margin: '0 0 2px' }}>예상</p>
+              <p style={{ fontSize: 28, color: '#0D9488', fontWeight: 950, margin: 0, lineHeight: 1 }}>
+                {primaryTime}<span style={{ fontSize: 14, fontWeight: 900 }}>분</span>
+              </p>
+              <p style={{ fontSize: 12, color: '#64748B', fontWeight: 800, margin: '6px 0 0' }}>{formatDistance(primaryWalk)}</p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+            {quickChecks.map(item => (
+              <span key={item.label} style={{ background: item.ok ? '#ECFDF5' : '#FFF7ED', color: item.ok ? '#047857' : '#C2410C', border: `1px solid ${item.ok ? '#A7F3D0' : '#FED7AA'}`, borderRadius: 999, padding: '7px 10px', fontSize: 13, fontWeight: 900 }}>
+                {item.label}
+              </span>
+            ))}
+          </div>
+
+          {memo && (
+            <div style={{ marginTop: 14, background: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: 16, padding: '12px 14px' }}>
+              <p style={{ fontSize: 13, color: '#92400E', fontWeight: 900, margin: '0 0 4px' }}>보호자 메모 반영됨</p>
+              <p style={{ fontSize: 15, color: '#78350F', fontWeight: 700, lineHeight: 1.55, margin: 0 }}>{memoShort}</p>
+            </div>
+          )}
+        </div>
+
         {/* ── ① 부담도 카드 ── */}
-        <div style={{ background: b.bg, border: `1.5px solid ${b.border}`, borderRadius: 22, padding: '22px 20px 18px' }}>
+        <div style={{ order: 5, background: b.bg, border: `1.5px solid ${b.border}`, borderRadius: 22, padding: '22px 20px 18px' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
             <div>
               <span style={{ background: '#fff', color: b.text, fontSize: 13, fontWeight: 900, padding: '5px 11px', borderRadius: 20, border: `1px solid ${b.border}` }}>이동 부담도</span>
@@ -192,11 +266,13 @@ export default function Route_() {
         </div>
 
         {/* ── ② 지도 ── */}
-        <RouteMap destination={destination} placeCoords={placeCoords} onCoordsReady={handleCoordsReady} />
+        <div style={{ order: 6 }}>
+          <RouteMap destination={destination} placeCoords={placeCoords} onCoordsReady={handleCoordsReady} />
+        </div>
 
         {/* ── ③ 경고 배너 ── */}
         {routeData?.weatherAlert && (
-          <div style={{ background: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: 14, padding: '13px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ order: 4, background: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: 14, padding: '13px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
             <AlertIcon size={18} color="#D97706" />
             <p style={{ color: '#92400E', fontWeight: 600, fontSize: 14, margin: 0 }}>{routeData.weatherAlert}</p>
           </div>
@@ -204,7 +280,7 @@ export default function Route_() {
 
         {/* ── ④ ODsay 추천 경로 (GPS 확보 시) ── */}
         {transitRoutes?.length > 0 && (
-          <div style={{ background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ order: 2, background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <div style={{ padding: '13px 16px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#059669', animation: 'liveP 1.5s infinite' }} />
               <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0 }}>실시간 대중교통 경로</p>
@@ -318,7 +394,11 @@ export default function Route_() {
         )}
 
         {/* ── ⑤ 이동수단 탭 ── */}
-        <div style={{ background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+        <div style={{ order: 3, background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ padding: '15px 16px 10px' }}>
+            <p style={{ fontSize: 13, color: '#64748B', fontWeight: 900, margin: '0 0 3px' }}>이동 방법</p>
+            <p style={{ fontSize: 19, color: '#0F172A', fontWeight: 950, margin: 0 }}>타는 방법을 먼저 확인하세요</p>
+          </div>
           <div style={{ display: 'flex', borderBottom: '1px solid #F1F5F9' }}>
             {[
               { id: 'bus',    label: '🚌 버스' },
@@ -526,7 +606,7 @@ export default function Route_() {
 
         {/* ── 대기질 ── */}
         {air && (
-          <div style={{ background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ order: 7, background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
               <WindIcon size={16} color="#0F172A" />
               <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0 }}>대기질</p>
@@ -551,7 +631,7 @@ export default function Route_() {
 
         {/* ── AI 안내 ── */}
         {explanation && (
-          <div style={{ background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, padding: '18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ order: 4, background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, padding: '18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
               <div style={{ width: 32, height: 32, borderRadius: 10, background: 'linear-gradient(135deg, #0F766E, #0D9488)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h18M3 6h18M3 18h12"/></svg>
@@ -565,7 +645,7 @@ export default function Route_() {
 
         {/* ── 무더위쉼터 ── */}
         {routeData?.shelters?.length > 0 && (
-          <div style={{ background: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: 16, overflow: 'hidden' }}>
+          <div style={{ order: 8, background: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: 16, overflow: 'hidden' }}>
             <div style={{ padding: '14px 16px', borderBottom: '1px solid #FEF3C7', display: 'flex', alignItems: 'center', gap: 8 }}>
               <ShelterIcon size={16} color="#D97706" />
               <p style={{ fontWeight: 700, fontSize: 14, color: '#92400E', margin: 0 }}>근처 무더위쉼터</p>

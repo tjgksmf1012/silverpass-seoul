@@ -84,6 +84,7 @@ export default function Home() {
         if (info.allow_stairs != null) updated.allowStairs = info.allow_stairs
         if (info.mobility_aid != null) updated.mobilityAid = info.mobility_aid
         if (info.phone) updated.guardianPhone = info.phone
+        if (info.notes) updated.healthNotes = info.notes
         if (info.frequent_places) {
           try {
             const favs = JSON.parse(info.frequent_places)

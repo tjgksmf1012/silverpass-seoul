@@ -336,10 +336,13 @@ export async function getRouteData(destination, profile, coords = null) {
 // ─── 부담도 계산 ──────────────────────────────────────────────────────────────
 function calcBurden(air, elevator, profile) {
   let score = 0
+  const notes = String(profile.healthNotes || '').toLowerCase()
   if (air.airAlert) score += 2
   if (air.pm10 > 80) score += 1
   if (!elevator.allOk && !profile.allowStairs) score += 3
   if (profile.mobilityAid) score += 1
+  if (/(휠체어|워커|지팡이|보행)/.test(notes)) score += 1
+  if (/(심장|호흡|어지럼|무릎|허리|수술|천천히|쉬)/.test(notes)) score += 1
   if (score === 0) return 'low'
   if (score <= 2) return 'medium'
   return 'high'

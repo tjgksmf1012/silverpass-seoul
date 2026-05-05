@@ -43,7 +43,7 @@ export async function generateRouteExplanation(routeData, profile) {
     return await callClaude('generateRouteExplanation', { routeData, profile })
   } catch (err) {
     console.warn('Claude explain fallback:', err)
-    return getMockExplanation(routeData)
+    return getMockExplanation(routeData, profile)
   }
 }
 
@@ -90,23 +90,31 @@ function getMockSubwayGuide(destination) {
 
 function getMockRouteRecommendation(query, profile) {
   const q = query.toLowerCase()
+  const notes = String(profile?.healthNotes || '').toLowerCase()
   let destination = query.trim()  // 입력값을 그대로 사용
   let destinationType = 'other'
+  const preferences = []
 
   if (q.includes('병원') || q.includes('의원')) { destinationType = 'hospital' }
   else if (q.includes('약국')) { destinationType = 'pharmacy' }
   else if (q.includes('복지관') || q.includes('센터')) { destinationType = 'welfare' }
   else if (q.includes('집') || q.includes('귀가')) { destination = '집'; destinationType = 'home' }
 
+  if (!profile?.allowStairs) preferences.push('계단 없음')
+  if (/(휠체어|워커|지팡이|보행)/.test(notes)) preferences.push('승강기/저상버스 우선')
+  if (/(심장|호흡|어지럼|무릎|허리|수술|천천히|쉬)/.test(notes)) preferences.push('짧은 도보와 쉬운 경로')
+
   return {
     destination,
     destinationType,
     urgency: 'normal',
-    preferences: profile.allowStairs ? [] : ['계단 없음'],
+    preferences,
   }
 }
 
-function getMockExplanation(routeData) {
+function getMockExplanation(routeData, profile = {}) {
+  const noteGuidance = buildHealthNoteGuidance(profile.healthNotes)
+
   return `📍 ${routeData.destination}까지 안내드릴게요.
 
 1️⃣ 가장 가까운 정류장에서 저상버스를 타세요.
@@ -114,6 +122,22 @@ function getMockExplanation(routeData) {
 
 2️⃣ ${routeData.duration}분 정도 걸려요.
    → 날씨: ${routeData.weather}. 천천히 이동하세요.
+${noteGuidance ? `   → 보호자 메모: ${noteGuidance}\n` : ''}
 
 3️⃣ 목적지 도착 후 보호자에게 알림이 전송됩니다.`
+}
+
+function buildHealthNoteGuidance(healthNotes = '') {
+  const notes = String(healthNotes).trim()
+  if (!notes) return ''
+  if (/(휠체어|워커|지팡이|보행)/.test(notes)) {
+    return '승강기와 저상버스가 있는 길을 우선으로 확인하세요.'
+  }
+  if (/(심장|호흡|어지럼|수술)/.test(notes)) {
+    return '무리하지 말고 중간에 쉬어가며 이동하세요.'
+  }
+  if (/(무릎|허리|관절|통증)/.test(notes)) {
+    return '계단과 긴 도보를 피하고 천천히 이동하세요.'
+  }
+  return '등록된 주의사항을 참고해 천천히 이동하세요.'
 }
