@@ -22,6 +22,10 @@ async function callClaude(action, payload) {
   }
 
   const data = await res.json()
+  if (data?._demo || !Object.prototype.hasOwnProperty.call(data, 'result')) {
+    throw new Error(data?.reason || 'Claude proxy returned fallback data')
+  }
+
   return data.result
 }
 

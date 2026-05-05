@@ -148,6 +148,10 @@ export default async function handler(req, res) {
     return sendJson(res, 400, { error: 'Unknown Claude action' })
   } catch (error) {
     console.error('[api/claude]', error)
-    return sendJson(res, 500, { error: error.message || 'Claude request failed' })
+    res.setHeader('Cache-Control', 'no-store')
+    return sendJson(res, 200, {
+      _demo: true,
+      reason: error.message || 'Claude request failed',
+    })
   }
 }
