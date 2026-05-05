@@ -78,7 +78,7 @@ export default function Route_() {
       coordsBased: true,
     } : prev)
 
-    // ODsay 경로 탐색 (출발: user, 도착: dest — 경도/위도 순서 주의)
+    // ODsay 경로 탐색 (출발: user, 도착: dest. 경도/위도 순서 주의)
     const routes = await searchTransitRoute(
       coords.user.lng, coords.user.lat,  // SX=경도, SY=위도
       coords.dest.lng, coords.dest.lat
@@ -130,28 +130,28 @@ export default function Route_() {
   const bestRoute = transitRoutes?.[selectedRoute]
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F8F9FA', paddingBottom: 32 }}>
+    <div style={{ minHeight: '100vh', background: '#F3F7FA', paddingBottom: 128 }}>
 
       {/* ── 헤더 ── */}
-      <div style={{ background: '#fff', padding: '52px 16px 20px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', gap: 14 }}>
-        <button onClick={() => navigate(-1)} style={{ width: 40, height: 40, borderRadius: 12, border: '1.5px solid #E2E8F0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
-          <ArrowLeft size={18} color="#0F172A" />
+      <div style={{ background: '#fff', padding: '52px 16px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 14, position: 'sticky', top: 0, zIndex: 20 }}>
+        <button onClick={() => navigate(-1)} aria-label="뒤로 가기" style={{ width: 48, height: 48, borderRadius: 14, border: '1.5px solid #CBD5E1', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+          <ArrowLeft size={22} color="#0F172A" />
         </button>
-        <div>
-          <p style={{ fontSize: 12, color: '#94A3B8', fontWeight: 600, margin: 0 }}>목적지</p>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', margin: 0 }}>{destination}</h1>
+        <div style={{ minWidth: 0 }}>
+          <p style={{ fontSize: 13, color: '#64748B', fontWeight: 800, margin: 0 }}>목적지</p>
+          <h1 style={{ fontSize: 23, fontWeight: 900, color: '#0F172A', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{destination}</h1>
         </div>
         <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-          <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>예상 시간</p>
-          <p style={{ fontSize: 22, fontWeight: 800, color: '#0D9488', margin: 0 }}>
+          <p style={{ fontSize: 13, color: '#64748B', margin: 0, fontWeight: 800 }}>예상 시간</p>
+          <p style={{ fontSize: 30, fontWeight: 900, color: '#0D9488', margin: '-1px 0 0', lineHeight: 1 }}>
             {bestRoute ? bestRoute.totalTime : routeData?.duration}
-            <span style={{ fontSize: 14, fontWeight: 600 }}>분</span>
+            <span style={{ fontSize: 16, fontWeight: 800 }}>분</span>
           </p>
           {bestRoute
-            ? <span style={{ fontSize: 10, background: '#F0FDFA', color: '#059669', fontWeight: 700, padding: '2px 7px', borderRadius: 20 }}>🚌 실시간</span>
+            ? <span style={{ fontSize: 12, background: '#F0FDFA', color: '#059669', fontWeight: 900, padding: '3px 8px', borderRadius: 20 }}>🚌 실시간</span>
             : isLive
-              ? <span style={{ fontSize: 10, background: '#ECFDF5', color: '#059669', fontWeight: 700, padding: '2px 7px', borderRadius: 20 }}>📍 GPS</span>
-              : <p style={{ fontSize: 10, color: '#CBD5E1', margin: 0 }}>대중교통 추정</p>
+              ? <span style={{ fontSize: 12, background: '#ECFDF5', color: '#059669', fontWeight: 900, padding: '3px 8px', borderRadius: 20 }}>📍 GPS</span>
+              : <p style={{ fontSize: 12, color: '#64748B', margin: '3px 0 0', fontWeight: 700 }}>대중교통 추정</p>
           }
         </div>
       </div>
@@ -159,22 +159,22 @@ export default function Route_() {
       <div style={{ padding: '16px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
         {/* ── ① 부담도 카드 ── */}
-        <div style={{ background: b.bg, border: `1.5px solid ${b.border}`, borderRadius: 20, padding: '20px 20px 16px' }}>
+        <div style={{ background: b.bg, border: `1.5px solid ${b.border}`, borderRadius: 22, padding: '22px 20px 18px' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
             <div>
-              <span style={{ background: '#fff', color: b.text, fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, border: `1px solid ${b.border}` }}>이동 부담도</span>
-              <p style={{ fontSize: 24, fontWeight: 800, color: b.text, margin: '10px 0 4px' }}>{b.label}</p>
-              <p style={{ fontSize: 13, color: b.accent, margin: 0, fontWeight: 600 }}>{b.sub}</p>
+              <span style={{ background: '#fff', color: b.text, fontSize: 13, fontWeight: 900, padding: '5px 11px', borderRadius: 20, border: `1px solid ${b.border}` }}>이동 부담도</span>
+              <p style={{ fontSize: 28, fontWeight: 900, color: b.text, margin: '11px 0 5px', lineHeight: 1.15 }}>{b.label}</p>
+              <p style={{ fontSize: 16, color: b.accent, margin: 0, fontWeight: 800 }}>{b.sub}</p>
             </div>
-            <div style={{ background: '#fff', borderRadius: 14, padding: '12px 14px', textAlign: 'center', border: `1px solid ${b.border}` }}>
-              <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 2px' }}>{isLive ? '직선 거리' : '예상 거리'}</p>
-              <p style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', margin: 0 }}>
+            <div style={{ background: '#fff', borderRadius: 16, padding: '13px 14px', textAlign: 'center', border: `1px solid ${b.border}`, minWidth: 104 }}>
+              <p style={{ fontSize: 12, color: '#64748B', margin: '0 0 3px', fontWeight: 800 }}>{isLive ? '직선 거리' : '예상 거리'}</p>
+              <p style={{ fontSize: 22, fontWeight: 900, color: '#0F172A', margin: 0 }}>
                 {routeData?.walkDistance >= 1000
                   ? <>{(routeData.walkDistance / 1000).toFixed(1)}<span style={{ fontSize: 12 }}>km</span></>
                   : <>{routeData?.walkDistance}<span style={{ fontSize: 12 }}>m</span></>
                 }
               </p>
-              {isLive && <p style={{ fontSize: 9, color: '#0D9488', margin: '2px 0 0', fontWeight: 600 }}>GPS 측정</p>}
+              {isLive && <p style={{ fontSize: 11, color: '#0D9488', margin: '3px 0 0', fontWeight: 800 }}>GPS 측정</p>}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -183,9 +183,9 @@ export default function Route_() {
               { Icon: ElevatorIcon, label: routeData?.elevator ? '승강기 정상' : '승강기 점검', ok: routeData?.elevator },
               { Icon: WindIcon,     label: air?.grade || '보통', ok: !air?.airAlert },
             ].map(({ Icon, label, ok }, i) => (
-              <div key={i} style={{ flex: 1, background: '#fff', border: `1px solid ${b.border}`, borderRadius: 12, padding: '10px 8px', textAlign: 'center' }}>
-                <Icon size={18} color={ok ? b.accent : '#DC2626'} />
-                <p style={{ fontSize: 11, fontWeight: 600, color: ok ? '#374151' : '#DC2626', margin: '6px 0 0', lineHeight: 1.3 }}>{label}</p>
+              <div key={i} style={{ flex: 1, background: '#fff', border: `1px solid ${b.border}`, borderRadius: 14, padding: '12px 8px', textAlign: 'center', minHeight: 76 }}>
+                <Icon size={22} color={ok ? b.accent : '#DC2626'} stroke={2} />
+                <p style={{ fontSize: 13, fontWeight: 800, color: ok ? '#374151' : '#DC2626', margin: '7px 0 0', lineHeight: 1.3 }}>{label}</p>
               </div>
             ))}
           </div>
@@ -326,11 +326,12 @@ export default function Route_() {
               { id: 'taxi',   label: '🚕 택시' },
             ].map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-                flex: 1, padding: '13px 4px', border: 'none', background: 'none', cursor: 'pointer',
-                fontSize: 14, fontWeight: activeTab === tab.id ? 800 : 600,
+                flex: 1, padding: '15px 4px', border: 'none', background: 'none', cursor: 'pointer',
+                fontSize: 17, fontWeight: activeTab === tab.id ? 900 : 800,
                 color: activeTab === tab.id ? '#0D9488' : '#94A3B8',
-                borderBottom: activeTab === tab.id ? '2.5px solid #0D9488' : '2.5px solid transparent',
+                borderBottom: activeTab === tab.id ? '3px solid #0D9488' : '3px solid transparent',
                 transition: 'all 0.15s',
+                minHeight: 58,
               }}>
                 {tab.label}
               </button>
@@ -581,10 +582,29 @@ export default function Route_() {
           </div>
         )}
 
-        {/* ── 공유 버튼 ── */}
-        <button onClick={() => navigate('/share', { state: { destination, routeData } })} style={{ width: '100%', border: 'none', borderRadius: 16, background: 'linear-gradient(135deg, #0F766E, #0D9488)', color: '#fff', fontWeight: 800, fontSize: 17, padding: '18px 0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 16px rgba(13,148,136,0.25)' }}>
-          <ShareIcon size={18} color="#fff" /> 보호자에게 공유하기
-        </button>
+        <div style={{
+          position: 'fixed',
+          left: '50%',
+          bottom: 0,
+          transform: 'translateX(-50%)',
+          width: '100%',
+          maxWidth: 480,
+          background: 'rgba(255,255,255,0.98)',
+          borderTop: '1px solid #E2E8F0',
+          boxShadow: '0 -10px 28px rgba(15,23,42,0.1)',
+          padding: '10px 14px 16px',
+          display: 'grid',
+          gridTemplateColumns: '1fr 0.72fr',
+          gap: 10,
+          zIndex: 40,
+        }}>
+          <button onClick={() => navigate('/share', { state: { destination, routeData } })} style={{ width: '100%', border: 'none', borderRadius: 16, background: 'linear-gradient(135deg, #0F766E, #0D9488)', color: '#fff', fontWeight: 900, fontSize: 17, padding: '16px 0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 16px rgba(13,148,136,0.22)' }}>
+            <ShareIcon size={20} color="#fff" stroke={2} /> 보호자 공유
+          </button>
+          <button onClick={() => navigate('/emergency')} style={{ width: '100%', border: '1.5px solid #FECACA', borderRadius: 16, background: '#FEF2F2', color: '#B91C1C', fontWeight: 900, fontSize: 17, padding: '16px 0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <AlertIcon size={19} color="#DC2626" stroke={2} /> 응급
+          </button>
+        </div>
       </div>
     </div>
   )

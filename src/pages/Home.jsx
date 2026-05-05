@@ -170,35 +170,35 @@ export default function Home() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F0F4F8', paddingBottom: 80 }}>
+    <div className="senior-page">
 
       {/* ── 그라디언트 헤더 ── */}
       <div style={{
-        background: 'linear-gradient(165deg, #064E3B 0%, #0F766E 50%, #0D9488 100%)',
-        padding: '52px 18px 24px',
+        background: 'linear-gradient(165deg, #064E3B 0%, #0F766E 52%, #0D9488 100%)',
+        padding: '56px 20px 28px',
       }}>
         {/* 인사말 + 위치 칩 */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
           <div>
-            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', fontWeight: 600, margin: 0 }}>{GREETING}</p>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: '#fff', margin: '5px 0 0', lineHeight: 1.25 }}>
+            <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.78)', fontWeight: 700, margin: 0 }}>{GREETING}</p>
+            <h1 style={{ fontSize: 30, fontWeight: 900, color: '#fff', margin: '6px 0 0', lineHeight: 1.18 }}>
               {profile.name ? `${profile.name}님,` : '실버패스 서울'}
               <br />
-              <span style={{ color: '#6EE7B7' }}>어디 가실 건가요?</span>
+              <span style={{ color: '#A7F3D0' }}>어디 가실 건가요?</span>
             </h1>
           </div>
 
           <button onClick={detectLocation} disabled={locating} style={{
             background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)',
             border: '1px solid rgba(255,255,255,0.28)',
-            borderRadius: 20, padding: '8px 14px',
+            borderRadius: 18, padding: '10px 14px',
             display: 'flex', alignItems: 'center', gap: 5,
-            cursor: 'pointer', flexShrink: 0, marginTop: 4,
+            cursor: 'pointer', flexShrink: 0, marginTop: 4, minHeight: 48,
           }}>
             <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2.5" strokeLinecap="round">
               <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
             </svg>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.9)' }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: 'rgba(255,255,255,0.95)' }}>
               {locating ? '감지 중…' : (profile.homeAddress ? extractDistrict(profile.homeAddress) : '위치 설정')}
             </span>
           </button>
@@ -210,10 +210,10 @@ export default function Home() {
             display: 'inline-flex', alignItems: 'center', gap: 6,
             background: airNow.airAlert ? 'rgba(220,38,38,0.22)' : 'rgba(255,255,255,0.14)',
             border: `1px solid ${airNow.airAlert ? 'rgba(220,38,38,0.4)' : 'rgba(255,255,255,0.22)'}`,
-            borderRadius: 20, padding: '5px 12px', marginBottom: 16,
+            borderRadius: 20, padding: '8px 13px', marginBottom: 18,
           }}>
-            <WindIcon size={12} color={airNow.airAlert ? '#FCA5A5' : 'rgba(255,255,255,0.85)'} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: airNow.airAlert ? '#FCA5A5' : 'rgba(255,255,255,0.85)' }}>
+            <WindIcon size={16} color={airNow.airAlert ? '#FCA5A5' : 'rgba(255,255,255,0.9)'} />
+            <span style={{ fontSize: 14, fontWeight: 800, color: airNow.airAlert ? '#FCA5A5' : 'rgba(255,255,255,0.92)' }}>
               대기질 {airNow.grade} · PM10 {airNow.pm10}㎍/㎥
             </span>
           </div>
@@ -222,28 +222,28 @@ export default function Home() {
         {/* 검색 바 */}
         <div style={{ position: 'relative' }}>
           <div style={{
-            background: '#fff', borderRadius: suggestions.length ? '16px 16px 0 0' : 16,
-            display: 'flex', alignItems: 'center', padding: '4px 4px 4px 16px', gap: 8,
-            boxShadow: '0 8px 28px rgba(0,0,0,0.18)',
+            background: '#fff', borderRadius: suggestions.length ? '20px 20px 0 0' : 20,
+            display: 'flex', alignItems: 'center', padding: '6px 6px 6px 18px', gap: 10,
+            boxShadow: '0 10px 30px rgba(0,0,0,0.18)',
           }}>
-            <SearchIcon size={18} color="#94A3B8" />
+            <SearchIcon size={22} color="#64748B" stroke={2} />
             <input
               type="text" value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
               placeholder="목적지를 입력하거나 말씀해 주세요"
               style={{
-                flex: 1, border: 'none', outline: 'none', fontSize: 15,
-                background: 'transparent', color: '#0F172A', padding: '13px 0',
+                flex: 1, border: 'none', outline: 'none', fontSize: 19,
+                background: 'transparent', color: '#0F172A', padding: '17px 0',
                 fontFamily: 'inherit',
               }}
             />
             <button onClick={startVoice} style={{
-              width: 46, height: 46, borderRadius: 12, border: 'none', cursor: 'pointer',
+              width: 58, height: 58, borderRadius: 16, border: 'none', cursor: 'pointer',
               background: listening ? '#FEE2E2' : '#F0FDFA',
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}>
-              <MicIcon size={20} color={listening ? '#DC2626' : '#0D9488'} />
+              <MicIcon size={26} color={listening ? '#DC2626' : '#0D9488'} stroke={2.2} />
             </button>
           </div>
 
@@ -251,7 +251,7 @@ export default function Home() {
           {suggestions.length > 0 && (
             <div style={{
               position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
-              background: '#fff', borderRadius: '0 0 16px 16px',
+              background: '#fff', borderRadius: '0 0 20px 20px',
               boxShadow: '0 8px 24px rgba(0,0,0,0.15)', overflow: 'hidden',
             }}>
               {suggestions.map((s, i) => (
@@ -265,21 +265,21 @@ export default function Home() {
                   style={{
                     width: '100%', border: 'none',
                     background: s.isDaum ? '#F8FAFC' : '#fff',
-                    padding: '12px 16px', textAlign: 'left',
+                    padding: '16px 18px', textAlign: 'left',
                     cursor: s.isLoading ? 'default' : 'pointer', fontFamily: 'inherit',
                     borderTop: i > 0 ? '1px solid #F1F5F9' : 'none',
                     display: 'flex', alignItems: 'center', gap: 10,
                   }}>
-                  <span style={{ fontSize: 16, flexShrink: 0 }}>
+                  <span style={{ fontSize: 20, flexShrink: 0 }}>
                     {s.isLoading ? '⏳' : s.isDaum ? '🔍' : '📍'}
                   </span>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <p style={{ fontWeight: 700, fontSize: 14, color: s.isDaum ? '#64748B' : '#0F172A', margin: 0 }}>{s.label}</p>
-                      {s.category && <span style={{ fontSize: 11, color: '#0D9488', background: '#F0FDFA', padding: '1px 6px', borderRadius: 8, fontWeight: 600 }}>{s.category}</span>}
+                      <p style={{ fontWeight: 800, fontSize: 17, color: s.isDaum ? '#475569' : '#0F172A', margin: 0 }}>{s.label}</p>
+                      {s.category && <span style={{ fontSize: 12, color: '#0D9488', background: '#F0FDFA', padding: '3px 8px', borderRadius: 10, fontWeight: 800 }}>{s.category}</span>}
                     </div>
-                    {s.address && <p style={{ fontSize: 12, color: '#94A3B8', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.address}</p>}
-                    {s.phone && <p style={{ fontSize: 12, color: '#64748B', margin: '1px 0 0' }}>{s.phone}</p>}
+                    {s.address && <p style={{ fontSize: 14, color: '#64748B', margin: '4px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.address}</p>}
+                    {s.phone && <p style={{ fontSize: 14, color: '#475569', margin: '2px 0 0' }}>{s.phone}</p>}
                   </div>
                 </button>
               ))}
@@ -288,27 +288,64 @@ export default function Home() {
         </div>
 
         {listening && (
-          <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.85)', fontWeight: 700, fontSize: 13, margin: '10px 0 0' }}>
-            🎤 듣고 있어요 — 말씀해 주세요
+          <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.9)', fontWeight: 800, fontSize: 16, margin: '12px 0 0' }}>
+            마이크 듣는 중이에요. 말씀해 주세요
           </p>
         )}
       </div>
 
       {/* ── 바디 ── */}
-      <div style={{ padding: '14px 16px 0', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ padding: '18px 16px 0', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
         {/* 길안내 버튼 (입력 시) */}
         {query && (
           <button onClick={() => handleSearch()} style={{
-            width: '100%', padding: '16px 0',
+            width: '100%', padding: '18px 0',
             background: 'linear-gradient(135deg, #0F766E, #0D9488)',
-            color: '#fff', fontWeight: 800, fontSize: 16,
-            border: 'none', borderRadius: 14, cursor: 'pointer',
+            color: '#fff', fontWeight: 900, fontSize: 18,
+            border: 'none', borderRadius: 18, cursor: 'pointer',
             boxShadow: '0 4px 18px rgba(13,148,136,0.35)',
           }}>
             {`"${query}" 길 안내 받기 →`}
           </button>
         )}
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          gap: 10,
+        }}>
+          {[
+            { label: '공기', value: airNow?.grade || '확인 중', color: airNow?.airAlert ? '#DC2626' : '#0D9488', bg: airNow?.airAlert ? '#FEF2F2' : '#F0FDFA' },
+            { label: '도보', value: `${profile.maxWalkMin || 20}분`, color: '#2563EB', bg: '#EFF6FF' },
+            { label: '응급', value: '119', color: '#DC2626', bg: '#FEF2F2' },
+          ].map(item => (
+            <div key={item.label} style={{
+              background: '#fff',
+              border: '1.5px solid #E2E8F0',
+              borderRadius: 16,
+              padding: '13px 10px',
+              minHeight: 82,
+              boxShadow: '0 1px 4px rgba(15,23,42,0.05)',
+            }}>
+              <p style={{ margin: '0 0 7px', fontSize: 13, fontWeight: 800, color: '#64748B' }}>{item.label}</p>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 32,
+                padding: '5px 10px',
+                borderRadius: 12,
+                background: item.bg,
+                color: item.color,
+                fontSize: 17,
+                fontWeight: 900,
+              }}>
+                {item.value}
+              </span>
+            </div>
+          ))}
+        </div>
 
         {/* 보호자 등록 빠른 목적지 */}
         {(() => {
@@ -319,13 +356,13 @@ export default function Home() {
           if (!allDests.length) return null
           return (
             <div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#64748B', margin: '0 0 8px', letterSpacing: '0.03em' }}>바로 출발</p>
+              <p className="senior-section-title">바로 출발</p>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {allDests.map((d, i) => (
                   <button key={i} onClick={() => goRoute(d.dest)}                    style={{
                       background: '#fff', border: '1.5px solid #CCFBF1',
-                      borderRadius: 20, padding: '10px 16px',
-                      fontSize: 14, fontWeight: 700, color: '#0F766E',
+                      borderRadius: 20, padding: '13px 18px',
+                      fontSize: 16, fontWeight: 800, color: '#0F766E',
                       cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                       transition: 'transform 0.12s',
                     }}
@@ -345,29 +382,29 @@ export default function Home() {
         {/* 프로필 미설정 안내 */}
         {!profile.name && (
           <button onClick={() => navigate('/profile')} style={{
-            background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 14,
-            padding: '13px 15px', display: 'flex', alignItems: 'center', gap: 12,
+            background: '#fff', border: '1.5px solid #BFEFE6', borderRadius: 18,
+            padding: '16px 16px', display: 'flex', alignItems: 'center', gap: 14,
             cursor: 'pointer', width: '100%', textAlign: 'left',
             boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: '#F0FDFA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#0D9488" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <div style={{ width: 48, height: 48, borderRadius: 14, background: '#F0FDFA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width={23} height={23} viewBox="0 0 24 24" fill="none" stroke="#0D9488" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                 <circle cx="12" cy="7" r="4"/>
               </svg>
             </div>
             <div style={{ flex: 1 }}>
-              <p style={{ fontWeight: 700, color: '#0F172A', fontSize: 14, margin: 0 }}>프로필을 먼저 설정해 주세요</p>
-              <p style={{ color: '#94A3B8', fontSize: 12, margin: '2px 0 0' }}>이름 · 보호자 연락처 · 이동 조건</p>
+              <p style={{ fontWeight: 900, color: '#0F172A', fontSize: 17, margin: 0 }}>프로필을 먼저 설정해 주세요</p>
+              <p style={{ color: '#64748B', fontSize: 14, margin: '4px 0 0', fontWeight: 600 }}>보행 시간과 보호자 연락처를 저장해요</p>
             </div>
-            <ChevronRight size={16} color="#CBD5E1" />
+            <ChevronRight size={20} color="#94A3B8" />
           </button>
         )}
 
         {/* 자주 가는 곳 */}
         <div>
-          <p style={{ fontSize: 13, fontWeight: 700, color: '#64748B', margin: '0 0 10px', letterSpacing: '0.03em' }}>자주 가는 곳</p>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <p className="senior-section-title">자주 가는 곳</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
             {profile.favorites.map(fav => {
               const cfg = FAV_CONFIG[fav.name] || DEFAULT_FAV
               const { Icon } = cfg
@@ -375,12 +412,13 @@ export default function Home() {
                 <button
                   key={fav.id} onClick={() => fav.address ? goRoute(fav.address) : navigate('/profile')}
                   style={{
-                    flex: 1, border: 'none', background: '#fff',
-                    borderRadius: 18, padding: '16px 6px 14px',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9,
+                    border: 'none', background: '#fff',
+                    borderRadius: 18, padding: '17px 10px 15px',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
                     cursor: 'pointer',
                     boxShadow: '0 2px 10px rgba(0,0,0,0.07)',
                     transition: 'transform 0.12s',
+                    minHeight: 132,
                   }}
                   onTouchStart={e => { e.currentTarget.style.transform = 'scale(0.91)' }}
                   onTouchEnd={e   => { e.currentTarget.style.transform = 'scale(1)' }}
@@ -388,16 +426,16 @@ export default function Home() {
                   onMouseUp={e    => { e.currentTarget.style.transform = 'scale(1)' }}
                 >
                   <div style={{
-                    width: 52, height: 52, borderRadius: 16,
+                    width: 58, height: 58, borderRadius: 18,
                     background: cfg.grad,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     boxShadow: `0 6px 14px ${cfg.shadow}`,
                   }}>
-                    <Icon size={24} color="#fff" />
+                    <Icon size={28} color="#fff" stroke={2} />
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: '#1E293B', letterSpacing: '-0.01em' }}>{fav.name}</span>
+                  <span style={{ fontSize: 17, fontWeight: 900, color: '#1E293B', letterSpacing: 0 }}>{fav.name}</span>
                   {fav.address && (
-                    <span style={{ fontSize: 10, color: '#94A3B8', maxWidth: '90%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: -4 }}>
+                    <span style={{ fontSize: 12, color: '#64748B', maxWidth: '90%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: -3, fontWeight: 600 }}>
                       {fav.address}
                     </span>
                   )}
@@ -410,31 +448,31 @@ export default function Home() {
         {/* 최근 이동 */}
         {history.length > 0 && (
           <div>
-            <p style={{ fontSize: 13, fontWeight: 700, color: '#64748B', margin: '0 0 10px', letterSpacing: '0.03em' }}>최근 이동</p>
+            <p className="senior-section-title">최근 이동</p>
             <div style={{ background: '#fff', borderRadius: 16, overflow: 'hidden', border: '1.5px solid #F1F5F9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
               {history.slice(0, 3).map((h, i) => {
                 const b = BURDEN_BADGE[h.burden] || BURDEN_BADGE.low
                 return (
                   <button key={i} onClick={() => goRoute(h.destination)}                    style={{
                       width: '100%', border: 'none', background: 'transparent',
-                      display: 'flex', alignItems: 'center', padding: '13px 16px', gap: 12,
+                      display: 'flex', alignItems: 'center', padding: '16px 16px', gap: 13,
                       cursor: 'pointer', textAlign: 'left',
                       borderBottom: i < Math.min(history.length, 3) - 1 ? '1px solid #F8FAFC' : 'none',
                     }}
                   >
-                    <div style={{ width: 32, height: 32, borderRadius: 8, background: '#F8F9FA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <ClockIcon size={14} color="#94A3B8" />
+                    <div style={{ width: 42, height: 42, borderRadius: 12, background: '#F8F9FA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <ClockIcon size={20} color="#64748B" />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontWeight: 700, fontSize: 15, color: '#0F172A', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.destination}</p>
-                      <p style={{ color: '#94A3B8', fontSize: 12, margin: '1px 0 0' }}>
+                      <p style={{ fontWeight: 900, fontSize: 17, color: '#0F172A', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.destination}</p>
+                      <p style={{ color: '#64748B', fontSize: 14, margin: '3px 0 0', fontWeight: 600 }}>
                         {new Date(h.timestamp).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
                       </p>
                     </div>
                     {h.burden && (
-                      <span style={{ background: b.bg, color: b.text, fontSize: 12, fontWeight: 700, padding: '3px 9px', borderRadius: 20, flexShrink: 0 }}>{b.label}</span>
+                      <span style={{ background: b.bg, color: b.text, fontSize: 13, fontWeight: 900, padding: '5px 10px', borderRadius: 20, flexShrink: 0 }}>{b.label}</span>
                     )}
-                    <ChevronRight size={14} color="#E2E8F0" />
+                    <ChevronRight size={18} color="#CBD5E1" />
                   </button>
                 )
               })}

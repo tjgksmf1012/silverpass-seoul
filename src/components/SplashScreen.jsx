@@ -1,5 +1,5 @@
 /**
- * SplashScreen — 앱 시작 시 1.8초 표시되는 브랜드 화면
+ * SplashScreen - 앱 시작 시 1.8초 표시되는 브랜드 화면
  * sessionStorage로 세션당 1번만 표시
  */
 import { useEffect, useState } from 'react'
@@ -41,7 +41,7 @@ export default function SplashScreen({ onDone }) {
 
       <h1 style={{
         fontSize: 30, fontWeight: 800, color: '#fff',
-        margin: '0 0 4px', letterSpacing: '-0.02em',
+        margin: '0 0 4px', letterSpacing: 0,
         animation: 'splashFadeUp 0.5s ease 0.15s both',
       }}>
         실버패스 서울

@@ -111,7 +111,7 @@ export default function Emergency() {
           <div style={{ textAlign: 'left' }}>
             <p style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', margin: 0 }}>보호자 호출</p>
             <p style={{ fontSize: 13, color: profile.guardianPhone ? '#94A3B8' : '#DC2626', margin: '3px 0 0' }}>
-              {profile.guardianPhone || '전화번호 미설정 — 프로필에서 설정'}
+              {profile.guardianPhone || '전화번호 미설정. 프로필에서 설정'}
             </p>
           </div>
         </button>
@@ -168,7 +168,7 @@ export default function Emergency() {
           background: 'none', border: 'none', color: '#94A3B8', fontSize: 14,
           fontWeight: 600, cursor: 'pointer', padding: '8px 0', marginTop: 'auto',
         }}>
-          응급 상황이 아니에요 — 홈으로 돌아가기
+          응급 상황이 아니에요. 홈으로 돌아가기
         </button>
       </div>
 

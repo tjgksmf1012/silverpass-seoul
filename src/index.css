@@ -8,9 +8,10 @@
       -apple-system, sans-serif;
     -webkit-tap-highlight-color: transparent;
     font-feature-settings: 'tnum';
+    font-size: 17px;
   }
   body {
-    @apply bg-cream-50 text-slate-900 antialiased;
+    @apply bg-slate-100 text-slate-900 antialiased;
     max-width: 480px;
     margin: 0 auto;
     min-height: 100vh;
@@ -19,9 +20,15 @@
   button {
     -webkit-user-select: none;
     user-select: none;
+    min-height: 48px;
+    touch-action: manipulation;
   }
   input, textarea, select {
     font-family: inherit;
+  }
+  :focus-visible {
+    outline: 3px solid #0D9488;
+    outline-offset: 3px;
   }
 }
 
@@ -30,14 +37,17 @@
   .btn-primary {
     @apply w-full bg-brand-gradient text-white font-bold py-4 px-6 rounded-2xl text-lg
            shadow-lift active:scale-[0.98] transition-all;
+    min-height: 58px;
   }
   .btn-secondary {
     @apply w-full bg-white border-2 border-brand-700 text-brand-700 font-bold py-4 px-6
            rounded-2xl text-lg active:scale-[0.98] transition-all;
+    min-height: 58px;
   }
   .btn-danger {
     @apply w-full bg-red-500 text-white font-bold py-4 px-6 rounded-2xl text-lg
            shadow-lift active:scale-[0.98] transition-all;
+    min-height: 58px;
   }
   .btn-ghost-danger {
     @apply w-full bg-red-50 border-2 border-red-200 text-red-600 font-bold py-4
@@ -76,8 +86,9 @@
 
   /* Inputs */
   .input-base {
-    @apply w-full border-2 border-slate-200 rounded-2xl px-4 py-3.5 text-base
+    @apply w-full border-2 border-slate-300 rounded-2xl px-4 py-4 text-lg
            outline-none focus:border-brand-500 transition-colors bg-white;
+    min-height: 58px;
   }
 
   /* Header gradient */
@@ -123,9 +134,22 @@
 
   /* Senior-friendly text */
   .text-senior {
-    font-size: 1.125rem;
+    font-size: 1.18rem;
     line-height: 1.75;
     color: #1e293b;
+  }
+
+  .senior-page {
+    min-height: 100vh;
+    background: #F3F7FA;
+    padding-bottom: 96px;
+  }
+
+  .senior-section-title {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #334155;
+    margin: 0 0 0.7rem;
   }
 }
 

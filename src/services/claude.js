@@ -113,7 +113,7 @@ function getMockExplanation(routeData) {
    → 승강기 상태: ${routeData.elevator ? '✅ 정상 운행 중' : '⚠️ 점검 중 - 계단 이용'}
 
 2️⃣ ${routeData.duration}분 정도 걸려요.
-   → 날씨: ${routeData.weather} — 천천히 이동하세요.
+   → 날씨: ${routeData.weather}. 천천히 이동하세요.
 
 3️⃣ 목적지 도착 후 보호자에게 알림이 전송됩니다.`
 }

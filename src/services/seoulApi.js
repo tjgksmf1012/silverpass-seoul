@@ -283,7 +283,7 @@ export async function getBusArrival(arsId = null) {
 export async function getRouteData(destination, profile, coords = null) {
   const district = profile.district || '종로구'
 
-  // coords = { user: {lat,lng}, dest: {lat,lng} } — RouteMap에서 얻은 실제 좌표
+  // coords = { user: {lat,lng}, dest: {lat,lng} }. RouteMap에서 얻은 실제 좌표
   const walkDistance = coords?.user && coords?.dest
     ? calcRealDistance(coords.user.lat, coords.user.lng, coords.dest.lat, coords.dest.lng)
     : (profile.mobilityAid ? 350 : 500)  // 좌표 없을 때 기본값 상향
@@ -355,9 +355,9 @@ function getWeatherLabel(air) {
 }
 
 function buildWeatherAlert(air) {
-  if (air.grade === '매우나쁨') return '🌫️ 미세먼지 매우나쁨 — 외출 자제 권고'
-  if (air.grade === '나쁨') return '🌫️ 미세먼지 나쁨 — 마스크를 착용하세요'
-  if (air.pm10 > 80) return '🔆 폭염 주의 — 무더위쉼터를 이용하세요'
+  if (air.grade === '매우나쁨') return '미세먼지 매우나쁨. 외출 자제 권고'
+  if (air.grade === '나쁨') return '미세먼지 나쁨. 마스크를 착용하세요'
+  if (air.pm10 > 80) return '폭염 주의. 무더위쉼터를 이용하세요'
   return null
 }
 

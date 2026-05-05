@@ -125,7 +125,7 @@ export default function Onboarding() {
           </div>
         )}
 
-        {/* 마지막 슬라이드 — 프로필 설정 안내 */}
+        {/* 마지막 슬라이드 - 프로필 설정 안내 */}
         {isLast && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
@@ -158,7 +158,7 @@ export default function Onboarding() {
         </button>
         {isLast && (
           <button onClick={skip} style={{ background: 'none', border: 'none', color: '#94A3B8', fontWeight: 600, fontSize: 14, cursor: 'pointer', padding: '8px 0' }}>
-            나중에 설정할게요 — 바로 시작
+            나중에 설정할게요. 바로 시작
           </button>
         )}
       </div>

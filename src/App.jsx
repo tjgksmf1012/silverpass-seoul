@@ -1,21 +1,64 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
-import Home from './pages/Home.jsx'
-import Profile from './pages/Profile.jsx'
-import Route_ from './pages/Route.jsx'
-import Share from './pages/Share.jsx'
-import Emergency from './pages/Emergency.jsx'
-import Onboarding from './pages/Onboarding.jsx'
-import Login from './pages/Login.jsx'
-import RoleSelect from './pages/RoleSelect.jsx'
-import GuardianDashboard from './pages/GuardianDashboard.jsx'
-import InviteOnboarding from './pages/InviteOnboarding.jsx'
-import NotFound from './pages/NotFound.jsx'
+import { Suspense, lazy, useState, useEffect } from 'react'
 import SplashScreen from './components/SplashScreen.jsx'
 import { isFirstVisit } from './services/storage.js'
-import { getCurrentUser, getRole, syncElderProfileFromSupabase } from './services/auth.js'
+
+const Home = lazy(() => import('./pages/Home.jsx'))
+const Profile = lazy(() => import('./pages/Profile.jsx'))
+const Route_ = lazy(() => import('./pages/Route.jsx'))
+const Share = lazy(() => import('./pages/Share.jsx'))
+const Emergency = lazy(() => import('./pages/Emergency.jsx'))
+const Onboarding = lazy(() => import('./pages/Onboarding.jsx'))
+const Login = lazy(() => import('./pages/Login.jsx'))
+const RoleSelect = lazy(() => import('./pages/RoleSelect.jsx'))
+const GuardianDashboard = lazy(() => import('./pages/GuardianDashboard.jsx'))
+const InviteOnboarding = lazy(() => import('./pages/InviteOnboarding.jsx'))
+const NotFound = lazy(() => import('./pages/NotFound.jsx'))
 
 const SPLASH_KEY = 'silverpass_splash_done'
+const ROLE_KEY = 'silverpass_role'
+const USER_KEY = 'silverpass_kakao_user'
+
+function getCurrentUser() {
+  try {
+    const raw = localStorage.getItem(USER_KEY)
+    return raw ? { ...JSON.parse(raw), role: getRole() } : null
+  } catch {
+    return null
+  }
+}
+
+function getRole() {
+  return localStorage.getItem(ROLE_KEY)
+}
+
+function PageLoading() {
+  return (
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: '#F3F7FA',
+      padding: 24,
+      textAlign: 'center',
+    }}>
+      <div>
+        <div style={{
+          width: 48,
+          height: 48,
+          borderRadius: '50%',
+          border: '4px solid #CCFBF1',
+          borderTopColor: '#0D9488',
+          animation: 'spin 0.8s linear infinite',
+          margin: '0 auto 16px',
+        }} />
+        <p style={{ margin: 0, color: '#0F766E', fontSize: 18, fontWeight: 800 }}>화면을 준비하고 있어요</p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    </div>
+  )
+}
 
 function RequireAuth({ children }) {
   const user = getCurrentUser()
@@ -46,7 +89,9 @@ export default function App() {
   useEffect(() => {
     const user = getCurrentUser()
     if (user && getRole() === 'user') {
-      syncElderProfileFromSupabase(user.id)
+      import('./services/auth.js')
+        .then(({ syncElderProfileFromSupabase }) => syncElderProfileFromSupabase(user.id))
+        .catch(() => {})
     }
   }, [])
 
@@ -58,27 +103,29 @@ export default function App() {
   return (
     <>
       {showSplash && <SplashScreen onDone={handleSplashDone} />}
-      <Routes>
-        {/* 인증 */}
-        <Route path="/login"       element={<Login />} />
-        <Route path="/role-select" element={<RoleSelect />} />
+      <Suspense fallback={<PageLoading />}>
+        <Routes>
+          {/* 인증 */}
+          <Route path="/login"       element={<Login />} />
+          <Route path="/role-select" element={<RoleSelect />} />
 
-        {/* 어르신 앱 */}
-        <Route path="/"            element={<HomeRoute />} />
-        <Route path="/onboarding"  element={<RequireElder><Onboarding /></RequireElder>} />
-        <Route path="/profile"     element={<RequireElder><Profile /></RequireElder>} />
-        <Route path="/route"       element={<RequireElder><Route_ /></RequireElder>} />
-        <Route path="/share"       element={<RequireElder><Share /></RequireElder>} />
-        <Route path="/emergency"   element={<RequireAuth><Emergency /></RequireAuth>} />
+          {/* 어르신 앱 */}
+          <Route path="/"            element={<HomeRoute />} />
+          <Route path="/onboarding"  element={<RequireElder><Onboarding /></RequireElder>} />
+          <Route path="/profile"     element={<RequireElder><Profile /></RequireElder>} />
+          <Route path="/route"       element={<RequireElder><Route_ /></RequireElder>} />
+          <Route path="/share"       element={<RequireElder><Share /></RequireElder>} />
+          <Route path="/emergency"   element={<RequireAuth><Emergency /></RequireAuth>} />
 
-        {/* 보호자 대시보드 (선택적) */}
-        <Route path="/guardian"    element={<RequireAuth><GuardianDashboard /></RequireAuth>} />
+          {/* 보호자 대시보드 (선택적) */}
+          <Route path="/guardian"    element={<RequireAuth><GuardianDashboard /></RequireAuth>} />
 
-        {/* 어르신 초대 링크 (로그인 불필요) */}
-        <Route path="/invite/:code" element={<InviteOnboarding />} />
+          {/* 어르신 초대 링크 (로그인 불필요) */}
+          <Route path="/invite/:code" element={<InviteOnboarding />} />
 
-        <Route path="*"            element={<NotFound />} />
-      </Routes>
+          <Route path="*"            element={<NotFound />} />
+        </Routes>
+      </Suspense>
     </>
   )
 }

@@ -1,6 +1,19 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { signIn, signInWithEmail, signUpWithEmail, joinAsUser, getRole } from '../services/auth.js'
+
+const ROLE_KEY = 'silverpass_role'
+const USER_KEY = 'silverpass_kakao_user'
+
+function getRole() {
+  return localStorage.getItem(ROLE_KEY)
+}
+
+function startAsGuest(name) {
+  const user = { id: 'guest_' + crypto.randomUUID(), name, thumbnail: '', provider: 'guest', role: 'user' }
+  localStorage.setItem(USER_KEY, JSON.stringify(user))
+  localStorage.setItem(ROLE_KEY, 'user')
+  return user
+}
 
 export default function Login() {
   const navigate = useNavigate()
@@ -25,9 +38,9 @@ export default function Login() {
     setLoading(true); setError('')
     try {
       if (inviteCode.trim()) {
+        const { joinAsUser } = await import('../services/auth.js')
         await joinAsUser(inviteCode.trim())
       } else {
-        const { startAsGuest } = await import('../services/auth.js')
         startAsGuest('어르신')
       }
       goHome()
@@ -41,7 +54,11 @@ export default function Login() {
   async function handleEmailLogin(e) {
     e.preventDefault()
     setLoading(true); setError('')
-    try { await signInWithEmail(email, password); goHome() }
+    try {
+      const { signInWithEmail } = await import('../services/auth.js')
+      await signInWithEmail(email, password)
+      goHome()
+    }
     catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }
@@ -50,14 +67,22 @@ export default function Login() {
     e.preventDefault()
     if (!name.trim()) return setError('이름을 입력해 주세요')
     setLoading(true); setError('')
-    try { await signUpWithEmail(email, password, name.trim(), phone.trim(), signupRole); goHome() }
+    try {
+      const { signUpWithEmail } = await import('../services/auth.js')
+      await signUpWithEmail(email, password, name.trim(), phone.trim(), signupRole)
+      goHome()
+    }
     catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }
 
   async function handleKakao() {
     setLoading(true); setError('')
-    try { await signIn(); goHome() }
+    try {
+      const { signIn } = await import('../services/auth.js')
+      await signIn()
+      goHome()
+    }
     catch (e) { setError(e.message || '카카오 로그인에 실패했어요') }
     finally { setLoading(false) }
   }

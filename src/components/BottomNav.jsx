@@ -16,30 +16,31 @@ export default function BottomNav() {
       position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)',
       width: '100%', maxWidth: 480,
       background: 'rgba(255,255,255,0.97)',
-      backdropFilter: 'blur(16px)',
-      borderTop: '1px solid #F1F5F9',
+      borderTop: '1px solid #DDE7F0',
       display: 'flex', justifyContent: 'space-around',
-      padding: '10px 0 22px', zIndex: 50,
-    }}>
+      padding: '8px 10px 16px', zIndex: 50,
+      boxShadow: '0 -10px 28px rgba(15, 23, 42, 0.08)',
+    }} aria-label="주요 메뉴">
       {items.map(({ path, label, Icon, activeColor, activeBg }) => {
         const active = pathname === path
         return (
-          <button key={path} onClick={() => navigate(path)} style={{
+          <button key={path} onClick={() => navigate(path)} aria-current={active ? 'page' : undefined} style={{
             flex: 1, border: 'none', background: 'transparent',
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-            cursor: 'pointer', padding: '4px 0',
+            cursor: 'pointer', padding: '6px 0 4px', borderRadius: 16,
+            minHeight: 66,
           }}>
             <div style={{
-              width: 44, height: 30, borderRadius: 10,
+              width: 52, height: 36, borderRadius: 14,
               background: active ? activeBg : 'transparent',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               transition: 'background 0.2s',
             }}>
-              <Icon size={20} color={active ? activeColor : '#94A3B8'} />
+              <Icon size={24} color={active ? activeColor : '#64748B'} stroke={2} />
             </div>
             <span style={{
-              fontSize: 11, fontWeight: 700,
-              color: active ? activeColor : '#94A3B8',
+              fontSize: 14, fontWeight: 800,
+              color: active ? activeColor : '#475569',
               transition: 'color 0.2s',
             }}>
               {label}

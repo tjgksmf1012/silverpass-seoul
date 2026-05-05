@@ -48,31 +48,31 @@ export default function Profile() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F0F4F8', paddingBottom: 100 }}>
+    <div style={{ minHeight: '100vh', background: '#F3F7FA', paddingBottom: 112 }}>
 
       {/* 그라디언트 헤더 */}
       <div style={{
         background: 'linear-gradient(165deg, #064E3B 0%, #0F766E 50%, #0D9488 100%)',
-        padding: '52px 18px 24px',
+        padding: '54px 20px 26px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <button onClick={() => { markVisited(); navigate('/') }} style={{
-            width: 38, height: 38, borderRadius: 12,
+            width: 48, height: 48, borderRadius: 14,
             border: '1px solid rgba(255,255,255,0.25)',
             background: 'rgba(255,255,255,0.15)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer',
           }}>
-            <ArrowLeft size={18} color="#fff" />
+            <ArrowLeft size={22} color="#fff" />
           </button>
           <div>
-            <h1 style={{ fontSize: 20, fontWeight: 800, color: '#fff', margin: 0 }}>내 정보</h1>
-            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '2px 0 0' }}>맞춤 경로를 위한 설정</p>
+            <h1 style={{ fontSize: 30, fontWeight: 900, color: '#fff', margin: 0 }}>내 정보</h1>
+            <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.8)', margin: '5px 0 0', fontWeight: 700 }}>맞춤 경로 설정</p>
           </div>
         </div>
       </div>
 
-      <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ padding: '16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
         {/* ── 계정 정보 ── */}
         <div style={{ background: '#fff', borderRadius: 16, padding: '15px 16px', border: '1.5px solid #F1F5F9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
@@ -273,12 +273,12 @@ export default function Profile() {
 
         {/* 저장 */}
         <button onClick={handleSave} style={{
-          width: '100%', border: 'none', borderRadius: 16, padding: '17px 0',
+          width: '100%', border: 'none', borderRadius: 16, padding: '18px 0',
           background: saved ? '#059669' : 'linear-gradient(135deg, #0F766E, #0D9488)',
-          color: '#fff', fontWeight: 800, fontSize: 17, cursor: 'pointer',
+          color: '#fff', fontWeight: 900, fontSize: 19, cursor: 'pointer',
           boxShadow: '0 4px 16px rgba(13,148,136,0.25)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          transition: 'background 0.3s', fontFamily: 'inherit',
+          transition: 'background 0.3s', fontFamily: 'inherit', minHeight: 62,
         }}>
           {saved ? <><CheckCircle size={18} color="#fff" /> 저장됐어요!</> : '저장하기'}
         </button>
@@ -290,18 +290,19 @@ export default function Profile() {
 }
 
 const inputSt = {
-  width: '100%', border: '1.5px solid #E2E8F0', borderRadius: 12,
-  padding: '12px 13px', fontSize: 15, outline: 'none',
+  width: '100%', border: '1.5px solid #CBD5E1', borderRadius: 14,
+  padding: '14px 14px', fontSize: 17, outline: 'none',
   background: '#F8F9FA', color: '#0F172A', boxSizing: 'border-box',
+  minHeight: 56,
   fontFamily: 'inherit',
 }
 
 function Card({ icon, title, children }) {
   return (
-    <div style={{ background: '#fff', borderRadius: 16, padding: '14px 15px', border: '1.5px solid #F1F5F9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
-        <div style={{ width: 26, height: 26, borderRadius: 7, background: '#F0FDFA', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>
-        <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0 }}>{title}</p>
+    <div style={{ background: '#fff', borderRadius: 18, padding: '17px 16px', border: '1.5px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 13 }}>
+        <div style={{ width: 32, height: 32, borderRadius: 9, background: '#F0FDFA', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>
+        <p style={{ fontWeight: 900, fontSize: 17, color: '#0F172A', margin: 0 }}>{title}</p>
       </div>
       {children}
     </div>
@@ -312,18 +313,18 @@ function Toggle({ label, desc, value, onChange }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
       <div>
-        <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0 }}>{label}</p>
-        <p style={{ color: '#94A3B8', fontSize: 12, margin: '2px 0 0' }}>{desc}</p>
+        <p style={{ fontWeight: 900, fontSize: 17, color: '#0F172A', margin: 0 }}>{label}</p>
+        <p style={{ color: '#64748B', fontSize: 14, margin: '4px 0 0', fontWeight: 600 }}>{desc}</p>
       </div>
       <button onClick={() => onChange(!value)} role="switch" aria-checked={value} style={{
-        width: 48, height: 28, borderRadius: 99, border: 'none', cursor: 'pointer', flexShrink: 0,
+        width: 58, height: 34, borderRadius: 99, border: 'none', cursor: 'pointer', flexShrink: 0,
         background: value ? 'linear-gradient(135deg, #0F766E, #0D9488)' : '#E2E8F0',
         position: 'relative', transition: 'background 0.2s',
       }}>
         <span style={{
-          position: 'absolute', top: 3, width: 22, height: 22, borderRadius: '50%',
+          position: 'absolute', top: 4, width: 26, height: 26, borderRadius: '50%',
           background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
-          transition: 'left 0.2s', left: value ? 23 : 3,
+          transition: 'left 0.2s', left: value ? 28 : 4,
         }} />
       </button>
     </div>
