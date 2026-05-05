@@ -91,7 +91,7 @@ export default function Login() {
               <span className="text-4xl">👴</span>
               <div className="text-left">
                 <p className="text-lg font-bold text-gray-900">어르신이세요?</p>
-                <p className="text-sm text-gray-500">이름만 입력하면 바로 시작!</p>
+                <p className="text-sm text-gray-500">코드가 있으면 연결, 없어도 시작!</p>
               </div>
             </button>
 
@@ -109,7 +109,7 @@ export default function Login() {
           </>
         )}
 
-        {/* 2단계: 어르신 - 이름만 입력 */}
+        {/* 2단계: 어르신 - 초대 코드 입력 */}
         {step === 'elder' && (
           <div className="space-y-4">
             <button onClick={() => setStep('select')} className="text-sm text-gray-400 flex items-center gap-1">

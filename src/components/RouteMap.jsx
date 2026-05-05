@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 
 const KAKAO_KEY = import.meta.env.VITE_KAKAO_MAP_KEY
 const SEOUL_CENTER = { lat: 37.5665, lng: 126.9780 }
+const SEOUL_BOUNDS = {
+  minLat: 37.413,
+  maxLat: 37.715,
+  minLng: 126.734,
+  maxLng: 127.269,
+}
 
 let sdkPromise = null
 function loadKakaoSDK() {
@@ -46,6 +52,13 @@ function drawDashedLine(kakao, map, from, to) {
   })
 }
 
+function isInSeoul(lat, lng) {
+  return lat >= SEOUL_BOUNDS.minLat &&
+    lat <= SEOUL_BOUNDS.maxLat &&
+    lng >= SEOUL_BOUNDS.minLng &&
+    lng <= SEOUL_BOUNDS.maxLng
+}
+
 export default function RouteMap({ destination, placeCoords, onCoordsReady }) {
   const mapDivRef   = useRef(null)
   const mapRef      = useRef(null)
@@ -53,6 +66,7 @@ export default function RouteMap({ destination, placeCoords, onCoordsReady }) {
   const polylineRef = useRef(null)
   const [status, setStatus]     = useState('loading')
   const [distInfo, setDistInfo] = useState(null)
+  const [locationNote, setLocationNote] = useState('')
 
   useEffect(() => {
     if (!mapDivRef.current) return
@@ -99,8 +113,10 @@ export default function RouteMap({ destination, placeCoords, onCoordsReady }) {
             pos => {
               if (cancelled || !mapRef.current) return
               const { latitude: lat, longitude: lon } = pos.coords
-              const inKorea = lat >= 33.0 && lat <= 38.7 && lon >= 124.5 && lon <= 131.0
-              if (!inKorea) return
+              if (!isInSeoul(lat, lon)) {
+                setLocationNote('서울 밖 위치는 목적지 중심으로 표시해요')
+                return
+              }
 
               const myLatLng = new kakao.maps.LatLng(lat, lon)
               const myOverlay = new kakao.maps.CustomOverlay({
@@ -128,9 +144,10 @@ export default function RouteMap({ destination, placeCoords, onCoordsReady }) {
               const duration = Math.max(8, Math.min(Math.ceil(dist / 1000 / 20 * 60) + 5 + Math.ceil(dist / 1000), 90))
 
               setDistInfo({ dist, duration })
+              setLocationNote('')
               onCoordsReady?.({ user: { lat, lng: lon }, dest: { lat: destLat, lng: destLng }, dist, duration })
             },
-            () => {},
+            () => setLocationNote('위치 권한이 없어서 목적지 중심으로 표시해요'),
             { timeout: 5000 }
           )
         }
@@ -198,10 +215,12 @@ export default function RouteMap({ destination, placeCoords, onCoordsReady }) {
             <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#0D9488', border: '2px solid #fff', boxShadow: '0 0 0 1px #0D9488' }} />
             <span style={{ fontSize: 11, color: '#64748B' }}>목적지</span>
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#2563EB', border: '2px solid #fff', boxShadow: '0 0 0 1px #2563EB' }} />
-            <span style={{ fontSize: 11, color: '#64748B' }}>현재 위치</span>
-          </span>
+          {distInfo && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#2563EB', border: '2px solid #fff', boxShadow: '0 0 0 1px #2563EB' }} />
+              <span style={{ fontSize: 11, color: '#64748B' }}>현재 위치</span>
+            </span>
+          )}
         </div>
       </div>
 
@@ -245,7 +264,9 @@ export default function RouteMap({ destination, placeCoords, onCoordsReady }) {
       </div>
 
       <div style={{ padding: '8px 14px', borderTop: '1px solid #F8FAFC' }}>
-        <p style={{ fontSize: 11, color: '#CBD5E1', margin: 0 }}>지도 © Kakao</p>
+        <p style={{ fontSize: 11, color: locationNote ? '#94A3B8' : '#CBD5E1', margin: 0 }}>
+          {locationNote || '지도 © Kakao'}
+        </p>
       </div>
     </div>
   )

@@ -38,17 +38,26 @@ export function saveProfile(profile) {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(profile))
 }
 
+function normalizeDestination(destination) {
+  if (typeof destination !== 'string') return destination
+  return destination.replace(/^"(.+)" 바로 이동$/, '$1')
+}
+
+function normalizeHistoryEntry(entry) {
+  return { ...entry, destination: normalizeDestination(entry?.destination) }
+}
+
 export function addHistory(entry) {
   try {
     const history = getHistory()
-    history.unshift({ ...entry, timestamp: Date.now() })
+    history.unshift(normalizeHistoryEntry({ ...entry, timestamp: Date.now() }))
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 20)))
   } catch {}
 }
 
 export function getHistory() {
   try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]')
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]').map(normalizeHistoryEntry)
   } catch {
     return []
   }

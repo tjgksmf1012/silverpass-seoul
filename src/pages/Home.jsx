@@ -139,7 +139,7 @@ export default function Home() {
     } catch (err) {
       console.error('장소 검색 오류:', err)
       setSuggestions([
-        { label: `"${text}" 바로 이동`, address: text, isRaw: true },
+        { label: text, address: text, category: '직접 입력', isRaw: true },
         { label: '주소 직접 검색하기', address: null, isDaum: true },
       ])
     }
@@ -256,7 +256,12 @@ export default function Home() {
             }}>
               {suggestions.map((s, i) => (
                 <button key={i}
-                  onClick={() => s.isDaum ? openAddressSearch() : (s.isLoading ? null : goRoute(s.label, { destination: s.label, address: s.address, lat: s.lat, lng: s.lng }))}
+                  onClick={() => {
+                    if (s.isDaum) return openAddressSearch()
+                    if (s.isLoading) return null
+                    const destination = s.isRaw ? (s.address || s.label) : s.label
+                    return goRoute(destination, { destination, address: s.address, lat: s.lat, lng: s.lng })
+                  }}
                   style={{
                     width: '100%', border: 'none',
                     background: s.isDaum ? '#F8FAFC' : '#fff',
