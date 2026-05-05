@@ -4,6 +4,7 @@ import { getProfile, addHistory } from '../services/storage.js'
 import { getRouteData, getRealtimeSubwayArrival } from '../services/seoulApi.js'
 import { generateRouteExplanation, generateSubwayGuide } from '../services/claude.js'
 import { searchTransitRoute, getRealtimeBusInfo, formatArrivalTime, pathTypeIcon } from '../services/odsayApi.js'
+import { getCurrentUser, getElderInfo, saveHistory } from '../services/auth.js'
 import { ArrowLeft, BusIcon, ElevatorIcon, WindIcon,
          ShelterIcon, ShareIcon, AlertIcon } from '../components/Icons.jsx'
 import RouteMap from '../components/RouteMap.jsx'
@@ -32,19 +33,27 @@ export default function Route_() {
 
   const profile = getProfile()
   const destination = state?.parsed?.destination || state?.query || '목적지'
+  const placeCoords = (state?.parsed?.lat && state?.parsed?.lng)
+    ? { lat: state.parsed.lat, lng: state.parsed.lng }
+    : null
 
   // ── 초기 로드 ──────────────────────────────────────────────────────────────
   useEffect(() => {
     async function load() {
       try {
+        const user = getCurrentUser()
+        const elderInfo = user ? await getElderInfo(user.id) : null
+        const profileWithNotes = { ...profile, healthNotes: elderInfo?.notes || '' }
+
         const [data, subway] = await Promise.all([
-          getRouteData(destination, profile, null),
+          getRouteData(destination, profileWithNotes, null),
           generateSubwayGuide(destination),
         ])
         setRouteData(data)
         setSubwayGuide(subway)
         addHistory({ destination, duration: data.duration, burden: data.burden })
-        const exp = await generateRouteExplanation(data, profile)
+        if (user) saveHistory(user.id, { destination, burden: data.burden, duration: String(data.duration) })
+        const exp = await generateRouteExplanation(data, profileWithNotes)
         setExplanation(exp)
         if (subway?.nearestStation) {
           const arrivals = await getRealtimeSubwayArrival(subway.nearestStation)
@@ -183,7 +192,7 @@ export default function Route_() {
         </div>
 
         {/* ── ② 지도 ── */}
-        <RouteMap destination={destination} onCoordsReady={handleCoordsReady} />
+        <RouteMap destination={destination} placeCoords={placeCoords} onCoordsReady={handleCoordsReady} />
 
         {/* ── ③ 경고 배너 ── */}
         {routeData?.weatherAlert && (

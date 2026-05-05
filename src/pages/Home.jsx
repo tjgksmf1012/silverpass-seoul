@@ -4,8 +4,10 @@ import BottomNav from '../components/BottomNav.jsx'
 import { SearchIcon, MicIcon, ChevronRight, ClockIcon,
          BuildingIcon, HospitalIcon, PillIcon, HomeIcon, WindIcon, MapPin } from '../components/Icons.jsx'
 import { getProfile, getHistory, saveProfile } from '../services/storage.js'
-import { checkEmergency, parseUserQuery } from '../services/claude.js'
+import { checkEmergency } from '../services/claude.js'
+import { searchPlaces } from '../services/kakaoSearch.js'
 import { getAirQuality } from '../services/seoulApi.js'
+import { getCurrentUser, getElderInfo } from '../services/auth.js'
 
 async function reverseGeocode(lat, lon) {
   try {
@@ -14,9 +16,19 @@ async function reverseGeocode(lat, lon) {
       { headers: { 'User-Agent': 'SilverPassSeoulCare/1.0' } }
     )
     const data = await res.json()
-    const raw = data.address?.city_district || data.address?.suburb || data.address?.quarter || ''
-    return raw.replace(/서울특별시\s*/, '').trim() || null
+    const addr = [
+      data.address?.city || data.address?.state,
+      data.address?.city_district || data.address?.suburb,
+      data.address?.road,
+    ].filter(Boolean).join(' ')
+    return addr || null
   } catch { return null }
+}
+
+function extractDistrict(address) {
+  if (!address) return '종로구'
+  const match = address.match(/(\S+구)/)
+  return match ? match[1] : '종로구'
 }
 
 const HOUR = new Date().getHours()
@@ -43,19 +55,46 @@ const BURDEN_BADGE = {
 export default function Home() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
-  const [loading, setLoading] = useState(false)
   const [listening, setListening] = useState(false)
+  const [pendingSearch, setPendingSearch] = useState(null)
+  const [suggestions, setSuggestions] = useState([])
   const [profile, setProfile] = useState(getProfile())
   const [history, setHistory] = useState(getHistory())
   const [airNow, setAirNow] = useState(null)
   const [locating, setLocating] = useState(false)
+  const [elderQuickDests, setElderQuickDests] = useState([])
   const recognitionRef = useRef(null)
 
   useEffect(() => {
     const p = getProfile()
     setProfile(p)
     setHistory(getHistory())
-    getAirQuality(p.district || '종로구').then(setAirNow)
+    getAirQuality(extractDistrict(p.homeAddress) || p.district || '종로구').then(setAirNow)
+
+    const user = getCurrentUser()
+    if (user) {
+      getElderInfo(user.id).then(info => {
+        if (!info) return
+        const dests = []
+        if (info.home_address) dests.push({ label: '🏠 집으로', dest: info.home_address })
+        if (info.frequent_places) {
+          try {
+            const favs = JSON.parse(info.frequent_places)
+            if (Array.isArray(favs)) {
+              const icons = { 복지관: '🏛️', 병원: '🏥', 약국: '💊', 집: '🏠' }
+              favs.filter(f => f.address).forEach(f => {
+                dests.push({ label: `${icons[f.name] || '📍'} ${f.name}`, dest: f.address })
+              })
+            }
+          } catch {
+            info.frequent_places.split(',').map(s => s.trim()).filter(Boolean).forEach(place => {
+              dests.push({ label: `📍 ${place}`, dest: place })
+            })
+          }
+        }
+        setElderQuickDests(dests)
+      })
+    }
   }, [])
 
   async function detectLocation() {
@@ -66,12 +105,12 @@ export default function Home() {
         const { latitude: lat, longitude: lon } = pos.coords
         const inKorea = lat >= 33.0 && lat <= 38.7 && lon >= 124.5 && lon <= 131.0
         if (!inKorea) { setLocating(false); return }
-        const district = await reverseGeocode(lat, lon)
-        if (district) {
-          const updated = { ...getProfile(), district }
+        const address = await reverseGeocode(lat, lon)
+        if (address) {
+          const updated = { ...getProfile(), homeAddress: address, district: extractDistrict(address) }
           saveProfile(updated)
           setProfile(updated)
-          getAirQuality(district).then(setAirNow)
+          getAirQuality(extractDistrict(address)).then(setAirNow)
         }
         setLocating(false)
       },
@@ -80,15 +119,41 @@ export default function Home() {
     )
   }
 
+  function goRoute(dest, parsed = null) {
+    setSuggestions([])
+    setQuery('')
+    navigate('/route', { state: { query: dest, parsed: parsed || { destination: dest } } })
+  }
+
   async function handleSearch(q) {
     const text = (q || query).trim()
     if (!text) return
     if (checkEmergency(text)) { navigate('/emergency', { state: { trigger: text } }); return }
-    setLoading(true)
+    setSuggestions([{ label: '검색 중…', address: null, isLoading: true }])
     try {
-      const parsed = await parseUserQuery(text, profile)
-      navigate('/route', { state: { query: text, parsed } })
-    } finally { setLoading(false) }
+      const results = await searchPlaces(text)
+      setSuggestions([
+        ...results.map(p => ({ label: p.name, address: p.address, category: p.category, phone: p.phone, lat: p.lat, lng: p.lng })),
+        { label: '주소 직접 검색하기', address: null, isDaum: true },
+      ])
+    } catch (err) {
+      console.error('장소 검색 오류:', err)
+      setSuggestions([
+        { label: `"${text}" 바로 이동`, address: text, isRaw: true },
+        { label: '주소 직접 검색하기', address: null, isDaum: true },
+      ])
+    }
+  }
+
+  function openAddressSearch() {
+    if (!window.daum?.Postcode) return
+    new window.daum.Postcode({
+      oncomplete(data) {
+        const addr = data.roadAddress || data.jibunAddress
+        setPendingSearch(null)
+        goRoute(addr)
+      },
+    }).open()
   }
 
   function startVoice() {
@@ -134,7 +199,7 @@ export default function Home() {
               <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
             </svg>
             <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.9)' }}>
-              {locating ? '감지 중…' : (profile.district || '위치 설정')}
+              {locating ? '감지 중…' : (profile.homeAddress ? extractDistrict(profile.homeAddress) : '위치 설정')}
             </span>
           </button>
         </div>
@@ -155,30 +220,66 @@ export default function Home() {
         )}
 
         {/* 검색 바 */}
-        <div style={{
-          background: '#fff', borderRadius: 16,
-          display: 'flex', alignItems: 'center', padding: '4px 4px 4px 16px', gap: 8,
-          boxShadow: '0 8px 28px rgba(0,0,0,0.18)',
-        }}>
-          <SearchIcon size={18} color="#94A3B8" />
-          <input
-            type="text" value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            placeholder="목적지를 입력하거나 말씀해 주세요"
-            style={{
-              flex: 1, border: 'none', outline: 'none', fontSize: 15,
-              background: 'transparent', color: '#0F172A', padding: '13px 0',
-              fontFamily: 'inherit',
-            }}
-          />
-          <button onClick={startVoice} style={{
-            width: 46, height: 46, borderRadius: 12, border: 'none', cursor: 'pointer',
-            background: listening ? '#FEE2E2' : '#F0FDFA',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        <div style={{ position: 'relative' }}>
+          <div style={{
+            background: '#fff', borderRadius: suggestions.length ? '16px 16px 0 0' : 16,
+            display: 'flex', alignItems: 'center', padding: '4px 4px 4px 16px', gap: 8,
+            boxShadow: '0 8px 28px rgba(0,0,0,0.18)',
           }}>
-            <MicIcon size={20} color={listening ? '#DC2626' : '#0D9488'} />
-          </button>
+            <SearchIcon size={18} color="#94A3B8" />
+            <input
+              type="text" value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              placeholder="목적지를 입력하거나 말씀해 주세요"
+              style={{
+                flex: 1, border: 'none', outline: 'none', fontSize: 15,
+                background: 'transparent', color: '#0F172A', padding: '13px 0',
+                fontFamily: 'inherit',
+              }}
+            />
+            <button onClick={startVoice} style={{
+              width: 46, height: 46, borderRadius: 12, border: 'none', cursor: 'pointer',
+              background: listening ? '#FEE2E2' : '#F0FDFA',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <MicIcon size={20} color={listening ? '#DC2626' : '#0D9488'} />
+            </button>
+          </div>
+
+          {/* 검색 결과 드롭다운 */}
+          {suggestions.length > 0 && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+              background: '#fff', borderRadius: '0 0 16px 16px',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.15)', overflow: 'hidden',
+            }}>
+              {suggestions.map((s, i) => (
+                <button key={i}
+                  onClick={() => s.isDaum ? openAddressSearch() : (s.isLoading ? null : goRoute(s.label, { destination: s.label, address: s.address, lat: s.lat, lng: s.lng }))}
+                  style={{
+                    width: '100%', border: 'none',
+                    background: s.isDaum ? '#F8FAFC' : '#fff',
+                    padding: '12px 16px', textAlign: 'left',
+                    cursor: s.isLoading ? 'default' : 'pointer', fontFamily: 'inherit',
+                    borderTop: i > 0 ? '1px solid #F1F5F9' : 'none',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>
+                    {s.isLoading ? '⏳' : s.isDaum ? '🔍' : '📍'}
+                  </span>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <p style={{ fontWeight: 700, fontSize: 14, color: s.isDaum ? '#64748B' : '#0F172A', margin: 0 }}>{s.label}</p>
+                      {s.category && <span style={{ fontSize: 11, color: '#0D9488', background: '#F0FDFA', padding: '1px 6px', borderRadius: 8, fontWeight: 600 }}>{s.category}</span>}
+                    </div>
+                    {s.address && <p style={{ fontSize: 12, color: '#94A3B8', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.address}</p>}
+                    {s.phone && <p style={{ fontSize: 12, color: '#64748B', margin: '1px 0 0' }}>{s.phone}</p>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {listening && (
@@ -193,17 +294,48 @@ export default function Home() {
 
         {/* 길안내 버튼 (입력 시) */}
         {query && (
-          <button onClick={() => handleSearch()} disabled={loading} style={{
+          <button onClick={() => handleSearch()} style={{
             width: '100%', padding: '16px 0',
             background: 'linear-gradient(135deg, #0F766E, #0D9488)',
             color: '#fff', fontWeight: 800, fontSize: 16,
             border: 'none', borderRadius: 14, cursor: 'pointer',
             boxShadow: '0 4px 18px rgba(13,148,136,0.35)',
-            opacity: loading ? 0.7 : 1,
           }}>
-            {loading ? '경로 찾는 중…' : `"${query}" 길 안내 받기 →`}
+            {`"${query}" 길 안내 받기 →`}
           </button>
         )}
+
+        {/* 보호자 등록 빠른 목적지 */}
+        {(() => {
+          const favDests = (profile.favorites || [])
+            .filter(f => f.address)
+            .map(f => ({ label: `${f.icon || '📍'} ${f.name}`, dest: f.address }))
+          const allDests = [...elderQuickDests, ...favDests]
+          if (!allDests.length) return null
+          return (
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 700, color: '#64748B', margin: '0 0 8px', letterSpacing: '0.03em' }}>바로 출발</p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {allDests.map((d, i) => (
+                  <button key={i} onClick={() => goRoute(d.dest)}                    style={{
+                      background: '#fff', border: '1.5px solid #CCFBF1',
+                      borderRadius: 20, padding: '10px 16px',
+                      fontSize: 14, fontWeight: 700, color: '#0F766E',
+                      cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                      transition: 'transform 0.12s',
+                    }}
+                    onTouchStart={e => { e.currentTarget.style.transform = 'scale(0.95)' }}
+                    onTouchEnd={e   => { e.currentTarget.style.transform = 'scale(1)' }}
+                    onMouseDown={e  => { e.currentTarget.style.transform = 'scale(0.95)' }}
+                    onMouseUp={e    => { e.currentTarget.style.transform = 'scale(1)' }}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* 프로필 미설정 안내 */}
         {!profile.name && (
@@ -236,8 +368,7 @@ export default function Home() {
               const { Icon } = cfg
               return (
                 <button
-                  key={fav.id} onClick={() => handleSearch(fav.name)} disabled={loading}
-                  style={{
+                  key={fav.id} onClick={() => fav.address ? goRoute(fav.address) : navigate('/profile')}                  style={{
                     background: '#fff', border: '1.5px solid #F1F5F9',
                     borderRadius: 16, padding: '15px 13px',
                     display: 'flex', alignItems: 'center', gap: 11,
@@ -273,8 +404,7 @@ export default function Home() {
               {history.slice(0, 3).map((h, i) => {
                 const b = BURDEN_BADGE[h.burden] || BURDEN_BADGE.low
                 return (
-                  <button key={i} onClick={() => handleSearch(h.destination)} disabled={loading}
-                    style={{
+                  <button key={i} onClick={() => goRoute(h.destination)}                    style={{
                       width: '100%', border: 'none', background: 'transparent',
                       display: 'flex', alignItems: 'center', padding: '13px 16px', gap: 12,
                       cursor: 'pointer', textAlign: 'left',
@@ -304,6 +434,55 @@ export default function Home() {
       </div>
 
       <BottomNav />
+
+      {/* 목적지 확인 바텀시트 */}
+      {pendingSearch && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center' }}>
+          <div onClick={() => setPendingSearch(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)' }} />
+          <div style={{ position: 'relative', background: '#fff', borderRadius: '20px 20px 0 0', padding: '16px 18px 32px', boxShadow: '0 -4px 24px rgba(0,0,0,0.12)', width: '100%', maxWidth: 480 }}>
+            <div style={{ width: 36, height: 4, borderRadius: 99, background: '#E2E8F0', margin: '0 auto 16px' }} />
+
+            {/* 목적지 표시 */}
+            <div style={{ background: '#F0FDFA', borderRadius: 12, padding: '12px 14px', marginBottom: 14 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: '#0D9488', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>목적지</p>
+              {(() => {
+                const GENERIC = ['목적지', '목적지명', '알 수 없음', '']
+                const dest = pendingSearch.parsed?.destination
+                const display = (!dest || GENERIC.includes(dest)) ? pendingSearch.query : dest
+                return (
+                  <>
+                    <p style={{ fontSize: 17, fontWeight: 800, color: '#0F172A', margin: 0 }}>{display}</p>
+                    {display !== pendingSearch.query && (
+                      <p style={{ fontSize: 12, color: '#94A3B8', margin: '3px 0 0' }}>검색어: "{pendingSearch.query}"</p>
+                    )}
+                  </>
+                )
+              })()}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button
+                onClick={() => { goRoute(pendingSearch.parsed?.destination || pendingSearch.query, pendingSearch.parsed); setPendingSearch(null); setQuery('') }}
+                style={{ width: '100%', border: 'none', borderRadius: 12, padding: '15px 0', background: 'linear-gradient(135deg, #0F766E, #0D9488)', color: '#fff', fontWeight: 800, fontSize: 16, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                맞아요, 안내해 주세요 →
+              </button>
+              <button
+                onClick={openAddressSearch}
+                style={{ width: '100%', border: '1.5px solid #CBD5E1', borderRadius: 12, padding: '13px 0', background: '#F8FAFC', color: '#475569', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                🔍 주소 직접 검색하기
+              </button>
+              <button
+                onClick={() => setPendingSearch(null)}
+                style={{ width: '100%', border: 'none', background: 'none', color: '#94A3B8', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '4px 0', fontFamily: 'inherit' }}
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

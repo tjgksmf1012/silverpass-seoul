@@ -50,7 +50,7 @@ export default function Emergency() {
         <div style={{ position: 'absolute', bottom: -30, left: -20, width: 130, height: 130, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
 
         {/* 뒤로가기 */}
-        <button onClick={() => navigate(-1)} style={{ position: 'absolute', top: 52, left: 16, width: 38, height: 38, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 1 }}>
+        <button onClick={() => navigate('/')} style={{ position: 'absolute', top: 52, left: 16, width: 38, height: 38, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }}>
           <ArrowLeft size={18} color="#fff" />
         </button>
 
