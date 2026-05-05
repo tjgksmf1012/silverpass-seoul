@@ -12,6 +12,7 @@ export function markVisited() {
 export const DEFAULT_PROFILE = {
   name: '',
   guardianPhone: '',
+  homeAddress: '',
   district: '종로구',
   maxWalkMin: 20,
   allowStairs: false,

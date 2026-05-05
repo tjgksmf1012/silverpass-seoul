@@ -1,0 +1,325 @@
+import { loginWithKakao, logoutKakao, getKakaoUser } from './kakaoAuth.js'
+import { supabase } from './supabase.js'
+
+const ROLE_KEY = 'silverpass_role'
+const USER_KEY = 'silverpass_kakao_user'
+
+// 공통: 유저 정보를 localStorage에 저장
+function saveLocalUser(user) {
+  localStorage.setItem(USER_KEY, JSON.stringify(user))
+}
+
+// 이메일 회원가입
+export async function signUpWithEmail(email, password, name, phone = '', role = 'user') {
+  if (!supabase) throw new Error('Supabase 연결이 필요합니다')
+  const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name } } })
+  if (error) throw new Error(error.message)
+  const id = data.user.id
+  await supabase.from('profiles').upsert({ id, name, thumbnail: '', role, phone }, { onConflict: 'id' })
+  localStorage.setItem(ROLE_KEY, role)
+  const { getProfile, saveProfile } = await import('./storage.js')
+  const profile = getProfile()
+  saveProfile({ ...profile, name, guardianPhone: role === 'guardian' ? phone : profile.guardianPhone })
+  const user = { id, name, thumbnail: '', provider: 'email' }
+  saveLocalUser(user)
+  return { ...user, role }
+}
+
+// 이메일 로그인
+export async function signInWithEmail(email, password) {
+  if (!supabase) throw new Error('Supabase 연결이 필요합니다')
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  if (error) throw new Error(error.message)
+  const id = data.user.id
+  const name = data.user.user_metadata?.name || '사용자'
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', id).single()
+  if (profile?.role) localStorage.setItem(ROLE_KEY, profile.role)
+  const user = { id, name, thumbnail: '', provider: 'email' }
+  saveLocalUser(user)
+  return { ...user, role: profile?.role || null }
+}
+
+// 카카오 로그인
+export async function signIn() {
+  const kakaoUser = await loginWithKakao()
+
+  if (supabase) {
+    const { data } = await supabase
+      .from('profiles')
+      .upsert(
+        { id: kakaoUser.id, name: kakaoUser.name, thumbnail: kakaoUser.thumbnail },
+        { onConflict: 'id', ignoreDuplicates: true }
+      )
+      .select()
+      .single()
+
+    if (data?.role) {
+      localStorage.setItem(ROLE_KEY, data.role)
+      return { ...kakaoUser, role: data.role }
+    }
+  }
+
+  return { ...kakaoUser, role: localStorage.getItem(ROLE_KEY) }
+}
+
+export async function setRole(kakaoId, role) {
+  localStorage.setItem(ROLE_KEY, role)
+  if (supabase) {
+    await supabase.from('profiles').update({ role }).eq('id', kakaoId)
+  }
+}
+
+export function getRole() {
+  return localStorage.getItem(ROLE_KEY)
+}
+
+export async function signOut() {
+  logoutKakao()
+  localStorage.removeItem(ROLE_KEY)
+}
+
+export function getCurrentUser() {
+  const kakaoUser = getKakaoUser()
+  if (!kakaoUser) return null
+  return { ...kakaoUser, role: getRole() }
+}
+
+// 보호자가 어르신 이름과 함께 초대 코드 생성
+export async function generateInviteCode(guardianId, userName) {
+  const code = Math.random().toString(36).substring(2, 8).toUpperCase()
+
+  if (supabase) {
+    // 기존 미사용 코드 삭제 후 새로 생성
+    await supabase.from('links').delete().eq('guardian_id', guardianId).is('user_id', null)
+    await supabase.from('links').insert({ guardian_id: guardianId, invite_code: code, user_name: userName })
+  }
+
+  return code
+}
+
+// 보호자가 코드로 사용자와 연결
+export async function connectWithCode(guardianId, code) {
+  if (!supabase) throw new Error('Supabase 연결이 필요합니다')
+
+  const { data: link, error } = await supabase
+    .from('links')
+    .select('*, user:profiles!links_user_id_fkey(*)')
+    .eq('invite_code', code.toUpperCase())
+    .single()
+
+  if (error || !link) throw new Error('유효하지 않은 코드예요')
+  if (link.guardian_id) throw new Error('이미 다른 보호자와 연결된 코드예요')
+
+  await supabase
+    .from('links')
+    .update({ guardian_id: guardianId })
+    .eq('invite_code', code.toUpperCase())
+
+  return link.user
+}
+
+// 보호자가 연결된 사용자 조회
+export async function getLinkedUser(guardianId) {
+  if (!supabase) return null
+
+  const { data } = await supabase
+    .from('links')
+    .select('*, user:profiles!links_user_id_fkey(*)')
+    .eq('guardian_id', guardianId)
+    .single()
+
+  return data?.user || null
+}
+
+// 사용자가 연결된 보호자 조회
+export async function getLinkedGuardian(userId) {
+  if (!supabase) return null
+
+  const { data } = await supabase
+    .from('links')
+    .select('*, guardian:profiles!links_guardian_id_fkey(*)')
+    .eq('user_id', userId)
+    .single()
+
+  return data?.guardian || null
+}
+
+// 어르신 게스트 시작 (계정 없이 이름만)
+export function startAsGuest(name) {
+  const userId = 'guest_' + crypto.randomUUID()
+  const user = { id: userId, name, thumbnail: '', provider: 'guest', role: 'user' }
+  saveLocalUser(user)
+  localStorage.setItem(ROLE_KEY, 'user')
+  return user
+}
+
+// 어르신이 초대 코드로 가입 (계정 없이 이름만)
+export async function joinAsUser(inviteCode, userName = null) {
+  if (!supabase) throw new Error('Supabase 연결이 필요합니다')
+
+  const { data: link, error } = await supabase
+    .from('links')
+    .select('*')
+    .eq('invite_code', inviteCode.toUpperCase())
+    .single()
+
+  if (error || !link) throw new Error('유효하지 않은 초대 코드예요')
+
+  // 재로그인 코드: user_id가 이미 있으면 기존 세션 복원
+  if (link.user_id) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', link.user_id)
+      .single()
+
+    // 사용된 재로그인 코드 삭제 (원본 링크는 유지)
+    if (link.is_relogin) {
+      await supabase.from('links').delete().eq('invite_code', inviteCode.toUpperCase())
+    }
+
+    const user = { id: link.user_id, name: profile?.name || '어르신', thumbnail: '', provider: 'invite', role: 'user' }
+    saveLocalUser(user)
+    localStorage.setItem(ROLE_KEY, 'user')
+    await syncElderProfileFromSupabase(link.user_id)
+    return user
+  }
+
+  // 신규 가입 - 어르신이 직접 입력한 이름 우선, 없으면 보호자가 설정한 이름
+  const resolvedName = userName || link.user_name || '어르신'
+  const userId = crypto.randomUUID()
+
+  await supabase.from('profiles').insert({ id: userId, name: resolvedName, thumbnail: '', role: 'user' })
+  await supabase.from('links').update({ user_id: userId }).eq('invite_code', inviteCode.toUpperCase())
+
+  const user = { id: userId, name: resolvedName, thumbnail: '', provider: 'invite', role: 'user' }
+  saveLocalUser(user)
+  localStorage.setItem(ROLE_KEY, 'user')
+  await syncElderProfileFromSupabase(userId)
+  return user
+}
+
+// 보호자가 기존 연결된 어르신 재로그인 코드 생성
+export async function generateReloginCode(guardianId, elderId) {
+  if (!supabase) throw new Error('Supabase 연결이 필요합니다')
+
+  const code = Math.random().toString(36).substring(2, 8).toUpperCase()
+
+  // 기존 재로그인 코드 삭제 후 새로 생성
+  await supabase.from('links').delete().eq('guardian_id', guardianId).eq('is_relogin', true)
+  await supabase.from('links').insert({
+    guardian_id: guardianId,
+    user_id: elderId,
+    invite_code: code,
+    is_relogin: true,
+  })
+
+  return code
+}
+
+// 사용자 이동 기록 저장
+export async function saveHistory(userId, { destination, burden, duration }) {
+  if (!supabase) return
+  await supabase.from('history').insert({ user_id: userId, destination, burden, duration })
+}
+
+// 보호자가 연결된 사용자의 이동 기록 조회
+export async function getLinkedUserHistory(userId) {
+  if (!supabase) return []
+
+  const { data } = await supabase
+    .from('history')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  return data || []
+}
+
+// 어르신 추가 정보 저장 (보호자가 등록)
+export async function updateElderInfo(elderId, {
+  homeAddress, frequentPlaces, notes, phone,
+  district, maxWalkMin, allowStairs, mobilityAid,
+}) {
+  if (!supabase) return
+
+  await supabase
+    .from('profiles')
+    .update({
+      home_address: homeAddress,
+      frequent_places: frequentPlaces,
+      notes,
+      phone,
+      district,
+      max_walk_min: maxWalkMin,
+      allow_stairs: allowStairs,
+      mobility_aid: mobilityAid,
+    })
+    .eq('id', elderId)
+}
+
+// 어르신 추가 정보 조회
+export async function getElderInfo(elderId) {
+  if (!supabase) return null
+
+  const { data } = await supabase
+    .from('profiles')
+    .select('home_address, frequent_places, notes, phone, district, max_walk_min, allow_stairs, mobility_aid')
+    .eq('id', elderId)
+    .single()
+
+  return data || null
+}
+
+// 보호자 Supabase 프로필을 localStorage에 반영
+export async function syncGuardianProfileFromSupabase(guardianId) {
+  if (!supabase) return
+  const { data } = await supabase
+    .from('profiles')
+    .select('phone, name')
+    .eq('id', guardianId)
+    .single()
+  if (!data) return
+
+  const { getProfile, saveProfile } = await import('./storage.js')
+  const local = getProfile()
+  saveProfile({
+    ...local,
+    ...(data.name  && { name: data.name }),
+    ...(data.phone && { guardianPhone: data.phone }),
+  })
+}
+
+// 어르신 Supabase 설정을 localStorage 프로필에 반영
+export async function syncElderProfileFromSupabase(elderId) {
+  const info = await getElderInfo(elderId)
+  if (!info) return
+
+  const { getProfile, saveProfile, DEFAULT_PROFILE } = await import('./storage.js')
+  const local = getProfile()
+
+  let syncedFavorites = null
+  if (info.frequent_places) {
+    try {
+      const parsed = JSON.parse(info.frequent_places)
+      if (Array.isArray(parsed)) {
+        syncedFavorites = DEFAULT_PROFILE.favorites.map(f => ({
+          ...f,
+          address: parsed.find(p => p.id === f.id)?.address || '',
+        }))
+      }
+    } catch {}
+  }
+
+  saveProfile({
+    ...local,
+    ...(info.home_address  && { homeAddress: info.home_address, district: info.home_address.match(/(\S+구)/)?.[1] || '종로구' }),
+    ...(info.district      && !info.home_address && { district: info.district }),
+    ...(info.max_walk_min  && { maxWalkMin: info.max_walk_min }),
+    ...(info.allow_stairs  != null && { allowStairs: info.allow_stairs }),
+    ...(info.mobility_aid  != null && { mobilityAid: info.mobility_aid }),
+    ...(info.phone         && { guardianPhone: info.phone }),
+    ...(syncedFavorites    && { favorites: syncedFavorites }),
+  })
+}

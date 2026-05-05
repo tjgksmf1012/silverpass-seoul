@@ -32,6 +32,10 @@ export async function parseUserQuery(query, profile) {
 - 계단 허용: ${profile.allowStairs ? '가능' : '불가'}
 - 보행보조기구: ${profile.mobilityAid ? '사용 중' : '없음'}
 - 자주 가는 곳: ${profile.favorites.map(f => f.name).join(', ')}
+${profile.healthNotes ? `- 건강/이동 메모: ${profile.healthNotes}` : ''}
+
+위 메모를 분석하여 preferences에 반드시 반영하세요.
+예시: "휠체어" → ["계단 없음", "저상버스 우선"], "보행 느림" → ["덜 걷기", "환승 최소화"], "심장" → ["완만한 경로"]
 
 응답 JSON 형식:
 {
@@ -95,7 +99,10 @@ export async function generateRouteExplanation(routeData, profile) {
 미세먼지: ${routeData.airQuality?.grade || '보통'}
 예상 소요시간: ${routeData.duration}분
 도보 거리: ${routeData.walkDistance}m
-보행보조기구: ${profile.mobilityAid ? '사용' : '없음'}`
+보행보조기구: ${profile.mobilityAid ? '사용' : '없음'}
+${profile.healthNotes ? `건강/이동 메모: ${profile.healthNotes}` : ''}
+
+메모에 언급된 신체 상태(휠체어, 보행 어려움, 심장 등)에 맞춰 주의사항을 안내에 포함하세요.`
 
   try {
     const res = await client.messages.create({
@@ -186,12 +193,12 @@ function getMockSubwayGuide(destination) {
 
 function getMockRouteRecommendation(query, profile) {
   const q = query.toLowerCase()
-  let destination = '목적지'
+  let destination = query.trim()  // 입력값을 그대로 사용
   let destinationType = 'other'
 
-  if (q.includes('병원') || q.includes('의원')) { destination = '가까운 병원'; destinationType = 'hospital' }
-  else if (q.includes('약국')) { destination = '가까운 약국'; destinationType = 'pharmacy' }
-  else if (q.includes('복지관') || q.includes('센터')) { destination = '복지관'; destinationType = 'welfare' }
+  if (q.includes('병원') || q.includes('의원')) { destinationType = 'hospital' }
+  else if (q.includes('약국')) { destinationType = 'pharmacy' }
+  else if (q.includes('복지관') || q.includes('센터')) { destinationType = 'welfare' }
   else if (q.includes('집') || q.includes('귀가')) { destination = '집'; destinationType = 'home' }
 
   return {

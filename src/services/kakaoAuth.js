@@ -4,7 +4,7 @@
  * App Key (JavaScript): d77d48048f93debc65e6b4fa073044d3
  */
 
-const KAKAO_KEY = 'd77d48048f93debc65e6b4fa073044d3'
+const KAKAO_KEY = '94d85ecb83397854f2a6449cc4d0b357'
 const KAKAO_USER_KEY = 'silverpass_kakao_user'
 
 function initKakao() {
