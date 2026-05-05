@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getCurrentUser, signOut, generateInviteCode, getLinkedUser, getLinkedUserHistory, updateElderInfo, getElderInfo, generateReloginCode } from '../services/auth.js'
+import { DEFAULT_FAVORITES, createFavoritePlace, normalizeFavorites } from '../services/storage.js'
 
 function openAddressSearch(onSelect) {
   if (!window.daum?.Postcode) return
@@ -12,19 +13,20 @@ function openAddressSearch(onSelect) {
 const BURDEN_LABEL = { low: '낮음', medium: '보통', high: '높음' }
 const BURDEN_COLOR = { low: 'text-green-600 bg-green-50', medium: 'text-yellow-600 bg-yellow-50', high: 'text-red-600 bg-red-50' }
 
-const FAV_SLOTS = [
-  { id: 1, name: '복지관', icon: '🏛️' },
-  { id: 2, name: '병원',   icon: '🏥' },
-  { id: 3, name: '약국',   icon: '💊' },
-  { id: 4, name: '집',     icon: '🏠' },
-]
+const ICON_OPTIONS = ['📍', '🏠', '👨‍👩‍👧', '🏥', '💊', '🏛️', '🛒', '☕', '🌳', '🚉']
 
 function parseFavorites(frequentPlaces) {
   try {
     const parsed = JSON.parse(frequentPlaces)
-    if (Array.isArray(parsed)) return FAV_SLOTS.map(s => ({ ...s, address: parsed.find(p => p.id === s.id)?.address || '' }))
+    if (Array.isArray(parsed)) return normalizeFavorites(parsed)
   } catch {}
-  return FAV_SLOTS.map(s => ({ ...s, address: '' }))
+  if (typeof frequentPlaces === 'string' && frequentPlaces.trim()) {
+    return normalizeFavorites([
+      ...DEFAULT_FAVORITES,
+      ...frequentPlaces.split(',').map(place => createFavoritePlace({ name: place.trim(), address: place.trim() })),
+    ])
+  }
+  return normalizeFavorites(DEFAULT_FAVORITES)
 }
 
 export default function GuardianDashboard() {
@@ -40,7 +42,7 @@ export default function GuardianDashboard() {
   const [elderName, setElderName] = useState('')
 
   const [elderInfo, setElderInfo] = useState({
-    homeAddress: '', favorites: FAV_SLOTS.map(s => ({ ...s, address: '' })),
+    homeAddress: '', favorites: normalizeFavorites(DEFAULT_FAVORITES),
     notes: '', phone: '', district: '', maxWalkMin: 20, allowStairs: true, mobilityAid: false,
   })
   const [editingInfo, setEditingInfo] = useState(false)
@@ -142,7 +144,7 @@ export default function GuardianDashboard() {
     try {
       await updateElderInfo(linkedUser.id, {
         ...elderInfo,
-        frequentPlaces: JSON.stringify(elderInfo.favorites),
+        frequentPlaces: JSON.stringify(normalizeFavorites(elderInfo.favorites)),
       })
       setInfoSaved(true)
       setEditingInfo(false)
@@ -150,6 +152,30 @@ export default function GuardianDashboard() {
     } finally {
       setInfoSaving(false)
     }
+  }
+
+  function updateFavorite(id, patch) {
+    setElderInfo(p => ({
+      ...p,
+      favorites: normalizeFavorites(p.favorites.map(f => f.id === id ? { ...f, ...patch } : f)),
+    }))
+  }
+
+  function addFavorite() {
+    setElderInfo(p => ({
+      ...p,
+      favorites: normalizeFavorites([
+        ...p.favorites,
+        createFavoritePlace({ name: '보호자 집', icon: '👨‍👩‍👧', showOnHome: true }),
+      ]),
+    }))
+  }
+
+  function removeFavorite(id) {
+    setElderInfo(p => ({
+      ...p,
+      favorites: normalizeFavorites(p.favorites.filter(f => f.id !== id)),
+    }))
   }
 
   function formatTime(iso) {
@@ -292,29 +318,72 @@ export default function GuardianDashboard() {
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-gray-500 mb-2 block">자주 가는 곳</label>
-                    <div className="space-y-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-500 block">자주 가는 곳</label>
+                        <p className="text-xs text-gray-400 mt-0.5">홈 화면에 보일 장소를 보호자가 정할 수 있어요</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={addFavorite}
+                        className="px-3 py-2 rounded-xl bg-brand-50 text-brand-700 text-xs font-bold active:scale-95 transition-all"
+                      >
+                        + 장소 추가
+                      </button>
+                    </div>
+                    <div className="space-y-3">
                       {elderInfo.favorites.map(fav => (
-                        <div key={fav.id} className="flex items-center gap-2">
-                          <span className="text-lg w-7 text-center flex-shrink-0">{fav.icon}</span>
-                          <span className="text-xs font-semibold text-gray-500 w-10 flex-shrink-0">{fav.name}</span>
-                          <div className="flex gap-1.5 flex-1">
+                        <div key={fav.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-3 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={fav.icon || '📍'}
+                              onChange={e => updateFavorite(fav.id, { icon: e.target.value })}
+                              className="w-12 h-11 rounded-xl border border-gray-200 bg-white text-lg text-center"
+                              aria-label={`${fav.name} 아이콘`}
+                            >
+                              {ICON_OPTIONS.map(icon => <option key={icon} value={icon}>{icon}</option>)}
+                            </select>
+                            <input
+                              type="text"
+                              value={fav.name}
+                              onChange={e => updateFavorite(fav.id, { name: e.target.value })}
+                              placeholder="장소 이름"
+                              className="input-base flex-1 min-w-0 text-sm py-2 bg-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => updateFavorite(fav.id, { showOnHome: !fav.showOnHome })}
+                              className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap ${
+                                fav.showOnHome ? 'bg-brand-600 text-white' : 'bg-white text-gray-400 border border-gray-200'
+                              }`}
+                            >
+                              {fav.showOnHome ? '홈 표시' : '숨김'}
+                            </button>
+                          </div>
+                          <div className="flex gap-1.5">
                             <input
                               type="text"
                               value={fav.address}
                               readOnly
                               placeholder="탭해서 주소 검색"
-                              className="input-base flex-1 text-xs py-2 cursor-pointer bg-gray-50"
-                              onClick={() => openAddressSearch(addr =>
-                                setElderInfo(p => ({ ...p, favorites: p.favorites.map(f => f.id === fav.id ? { ...f, address: addr } : f) }))
-                              )}
+                              className="input-base flex-1 min-w-0 text-xs py-2 cursor-pointer bg-white"
+                              onClick={() => openAddressSearch(addr => updateFavorite(fav.id, { address: addr }))}
                             />
                             {fav.address && (
                               <button
                                 type="button"
-                                onClick={() => setElderInfo(p => ({ ...p, favorites: p.favorites.map(f => f.id === fav.id ? { ...f, address: '' } : f) }))}
+                                onClick={() => updateFavorite(fav.id, { address: '' })}
                                 className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-400 text-sm flex-shrink-0 flex items-center justify-center"
                               >×</button>
+                            )}
+                            {fav.custom && (
+                              <button
+                                type="button"
+                                onClick={() => removeFavorite(fav.id)}
+                                className="px-2 rounded-lg border border-red-100 bg-white text-red-400 text-xs font-bold flex-shrink-0"
+                              >
+                                삭제
+                              </button>
                             )}
                           </div>
                         </div>
@@ -425,7 +494,12 @@ export default function GuardianDashboard() {
                         <InfoRow icon="🏠" label="집 주소" value={elderInfo.homeAddress} />
                       )}
                       {elderInfo.favorites.filter(f => f.address).map(fav => (
-                        <InfoRow key={fav.id} icon={fav.icon} label={fav.name} value={fav.address} />
+                        <InfoRow
+                          key={fav.id}
+                          icon={fav.icon}
+                          label={`${fav.name}${fav.showOnHome ? ' · 홈 표시' : ' · 숨김'}`}
+                          value={fav.address}
+                        />
                       ))}
                       {elderInfo.phone && (
                         <InfoRow icon="📞" label="보호자 전화번호" value={elderInfo.phone} />

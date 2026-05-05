@@ -317,7 +317,7 @@ export async function syncElderProfileFromSupabase(elderId) {
   const info = await getElderInfo(elderId)
   if (!info) return
 
-  const { getProfile, saveProfile, DEFAULT_PROFILE } = await import('./storage.js')
+  const { getProfile, saveProfile, normalizeFavorites } = await import('./storage.js')
   const local = getProfile()
 
   let syncedFavorites = null
@@ -325,10 +325,7 @@ export async function syncElderProfileFromSupabase(elderId) {
     try {
       const parsed = JSON.parse(info.frequent_places)
       if (Array.isArray(parsed)) {
-        syncedFavorites = DEFAULT_PROFILE.favorites.map(f => ({
-          ...f,
-          address: parsed.find(p => p.id === f.id)?.address || '',
-        }))
+        syncedFavorites = normalizeFavorites(parsed)
       }
     } catch {}
   }

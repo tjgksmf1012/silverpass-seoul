@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import BottomNav from '../components/BottomNav.jsx'
 import { SearchIcon, MicIcon, ChevronRight, ClockIcon,
          BuildingIcon, HospitalIcon, PillIcon, HomeIcon, WindIcon, MapPin } from '../components/Icons.jsx'
-import { getProfile, getHistory, saveProfile } from '../services/storage.js'
+import { getProfile, getHistory, saveProfile, normalizeFavorites } from '../services/storage.js'
 import { checkEmergency } from '../services/claude.js'
 import { searchPlaces } from '../services/kakaoSearch.js'
 import { getAirQuality } from '../services/seoulApi.js'
@@ -62,7 +62,6 @@ export default function Home() {
   const [history, setHistory] = useState(getHistory())
   const [airNow, setAirNow] = useState(null)
   const [locating, setLocating] = useState(false)
-  const [elderQuickDests, setElderQuickDests] = useState([])
   const recognitionRef = useRef(null)
 
   useEffect(() => {
@@ -75,24 +74,29 @@ export default function Home() {
     if (user) {
       getElderInfo(user.id).then(info => {
         if (!info) return
-        const dests = []
-        if (info.home_address) dests.push({ label: '🏠 집으로', dest: info.home_address })
+        const updated = { ...getProfile() }
+        if (info.home_address) {
+          updated.homeAddress = info.home_address
+          updated.district = extractDistrict(info.home_address)
+        }
+        if (info.district && !info.home_address) updated.district = info.district
+        if (info.max_walk_min) updated.maxWalkMin = info.max_walk_min
+        if (info.allow_stairs != null) updated.allowStairs = info.allow_stairs
+        if (info.mobility_aid != null) updated.mobilityAid = info.mobility_aid
+        if (info.phone) updated.guardianPhone = info.phone
         if (info.frequent_places) {
           try {
             const favs = JSON.parse(info.frequent_places)
-            if (Array.isArray(favs)) {
-              const icons = { 복지관: '🏛️', 병원: '🏥', 약국: '💊', 집: '🏠' }
-              favs.filter(f => f.address).forEach(f => {
-                dests.push({ label: `${icons[f.name] || '📍'} ${f.name}`, dest: f.address })
-              })
-            }
+            if (Array.isArray(favs)) updated.favorites = normalizeFavorites(favs)
           } catch {
-            info.frequent_places.split(',').map(s => s.trim()).filter(Boolean).forEach(place => {
-              dests.push({ label: `📍 ${place}`, dest: place })
-            })
+            updated.favorites = normalizeFavorites(info.frequent_places
+              .split(',')
+              .map(place => ({ id: `remote_${place}`, name: place.trim(), icon: '📍', address: place.trim(), showOnHome: true, custom: true }))
+              .filter(place => place.name))
           }
         }
-        setElderQuickDests(dests)
+        saveProfile(updated)
+        setProfile(updated)
       })
     }
   }, [])
@@ -168,6 +172,8 @@ export default function Home() {
     rec.onerror  = () => setListening(false)
     recognitionRef.current = rec; rec.start()
   }
+
+  const visibleFavorites = (profile.favorites || []).filter(f => f.showOnHome !== false)
 
   return (
     <div className="senior-page">
@@ -312,10 +318,19 @@ export default function Home() {
 
         {/* 보호자 등록 빠른 목적지 */}
         {(() => {
-          const favDests = (profile.favorites || [])
+          const favDests = visibleFavorites
             .filter(f => f.address)
             .map(f => ({ label: `${f.icon || '📍'} ${f.name}`, dest: f.address }))
-          const allDests = [...elderQuickDests, ...favDests]
+          const homeDest = profile.homeAddress
+            ? [{ label: '🏠 집으로', dest: profile.homeAddress }]
+            : []
+          const seen = new Set()
+          const allDests = [...homeDest, ...favDests].filter(item => {
+            const key = item.dest
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+          })
           if (!allDests.length) return null
           return (
             <div>
@@ -338,6 +353,11 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+              {!visibleFavorites.some(f => f.address) && profile.homeAddress && (
+                <p style={{ color: '#64748B', fontSize: 13, fontWeight: 600, margin: '8px 0 0' }}>
+                  보호자가 자주 가는 곳을 등록하면 여기에 함께 보여요
+                </p>
+              )}
             </div>
           )
         })()}
@@ -368,7 +388,7 @@ export default function Home() {
         <div>
           <p className="senior-section-title">자주 가는 곳</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-            {profile.favorites.map(fav => {
+            {visibleFavorites.map(fav => {
               const cfg = FAV_CONFIG[fav.name] || DEFAULT_FAV
               const { Icon } = cfg
               return (
@@ -406,6 +426,15 @@ export default function Home() {
               )
             })}
           </div>
+          {!visibleFavorites.length && (
+            <div style={{
+              border: '1.5px dashed #BFEFE6', background: '#fff',
+              borderRadius: 18, padding: '18px 14px', color: '#0F766E',
+              fontSize: 16, fontWeight: 800, textAlign: 'center',
+            }}>
+              보호자가 등록하면 여기에 보여요
+            </div>
+          )}
         </div>
 
         {/* 최근 이동 */}
