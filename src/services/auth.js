@@ -9,6 +9,10 @@ function saveLocalUser(user) {
   localStorage.setItem(USER_KEY, JSON.stringify(user))
 }
 
+function hasRemoteProfile(userId) {
+  return Boolean(userId) && !String(userId).startsWith('guest_')
+}
+
 // 이메일 회원가입
 export async function signUpWithEmail(email, password, name, phone = '', role = 'user') {
   if (!supabase) throw new Error('Supabase 연결이 필요합니다')
@@ -64,7 +68,7 @@ export async function signIn() {
 
 export async function setRole(kakaoId, role) {
   localStorage.setItem(ROLE_KEY, role)
-  if (supabase) {
+  if (supabase && hasRemoteProfile(kakaoId)) {
     await supabase.from('profiles').update({ role }).eq('id', kakaoId)
   }
 }
@@ -173,9 +177,9 @@ export async function joinAsUser(inviteCode, userName = null) {
       .eq('id', link.user_id)
       .maybeSingle()
 
-    // 사용된 재로그인 코드 삭제 (원본 링크는 유지)
+    // 재로그인 코드는 기존 연결 row를 재사용하므로 연결 자체는 삭제하지 않습니다.
     if (link.is_relogin) {
-      await supabase.from('links').delete().eq('invite_code', inviteCode.toUpperCase())
+      await supabase.from('links').update({ is_relogin: false }).eq('invite_code', inviteCode.toUpperCase())
     }
 
     const user = { id: link.user_id, name: profile?.name || '어르신', thumbnail: '', provider: 'invite', role: 'user' }
@@ -189,7 +193,10 @@ export async function joinAsUser(inviteCode, userName = null) {
   const resolvedName = userName || link.user_name || '어르신'
   const userId = crypto.randomUUID()
 
-  await supabase.from('profiles').insert({ id: userId, name: resolvedName, thumbnail: '', role: 'user' })
+  await supabase.from('profiles').upsert(
+    { id: userId, name: resolvedName, thumbnail: '', role: 'user' },
+    { onConflict: 'id' }
+  )
   await supabase.from('links').update({ user_id: userId }).eq('invite_code', inviteCode.toUpperCase())
 
   const user = { id: userId, name: resolvedName, thumbnail: '', provider: 'invite', role: 'user' }
@@ -205,21 +212,21 @@ export async function generateReloginCode(guardianId, elderId) {
 
   const code = Math.random().toString(36).substring(2, 8).toUpperCase()
 
-  // 기존 재로그인 코드 삭제 후 새로 생성
-  await supabase.from('links').delete().eq('guardian_id', guardianId).eq('is_relogin', true)
-  await supabase.from('links').insert({
-    guardian_id: guardianId,
-    user_id: elderId,
-    invite_code: code,
-    is_relogin: true,
-  })
+  // 기존 연결 row를 갱신해 unique 제약 충돌(409)을 피하고 연결 관계를 보존합니다.
+  const { error } = await supabase
+    .from('links')
+    .update({ invite_code: code, is_relogin: true })
+    .eq('guardian_id', guardianId)
+    .eq('user_id', elderId)
+
+  if (error) throw new Error(error.message)
 
   return code
 }
 
 // 사용자 이동 기록 저장
 export async function saveHistory(userId, { destination, burden, duration }) {
-  if (!supabase) return
+  if (!supabase || !hasRemoteProfile(userId)) return
   await supabase.from('history').insert({ user_id: userId, destination, burden, duration })
 }
 
@@ -242,7 +249,7 @@ export async function updateElderInfo(elderId, {
   homeAddress, frequentPlaces, notes, phone,
   district, maxWalkMin, allowStairs, mobilityAid,
 }) {
-  if (!supabase) return
+  if (!supabase || !hasRemoteProfile(elderId)) return
 
   await supabase
     .from('profiles')
@@ -261,7 +268,7 @@ export async function updateElderInfo(elderId, {
 
 // 어르신 추가 정보 조회
 export async function getElderInfo(elderId) {
-  if (!supabase) return null
+  if (!supabase || !hasRemoteProfile(elderId)) return null
 
   const { data } = await supabase
     .from('profiles')
