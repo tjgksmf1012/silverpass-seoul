@@ -52,7 +52,7 @@ function normalizeQueryResult(data, query, profile = {}) {
   if (!data || typeof data !== 'object') return fallback
 
   const rawDestination = String(data.destination || '').trim()
-  const unknownDestinations = ['알 수 없음', 'unknown', '미상', '불명', '목적지']
+  const unknownDestinations = ['알 수 없음', 'unknown', '미상', '불명', '목적지', '현재 위치', '현재위치', '현위치']
   const destination = !rawDestination || unknownDestinations.includes(rawDestination.toLowerCase())
     ? fallback.destination
     : rawDestination
@@ -76,7 +76,9 @@ function normalizeQueryResult(data, query, profile = {}) {
 function getFallbackQueryResult(query = '', profile = {}) {
   const q = String(query || '').trim()
   const lower = q.toLowerCase()
-  let destination = q || '목적지'
+  let destination = q
+    .replace(/\s*(으로|로|에)?\s*(가고\s*싶어요|가고\s*싶어|가고싶어요|가고싶어|가주세요|가줘|갈래요|가요|이동해줘|이동)$/i, '')
+    .trim() || q || '목적지'
   let destinationType = 'other'
 
   const district = q.match(/([가-힣]+구)/)?.[1]
