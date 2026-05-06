@@ -579,6 +579,8 @@ export default function Route_() {
       return [{
         type: 'walk',
         title: `${destination}까지 걷기`,
+        distance: directDistance,
+        sectionTime: walkOnlyMinutes,
         detail: `${startDisplay}에서 목적지까지 도보 중심으로 안내해요. 대기질, 쉼터, 응급 정보는 계속 공공데이터로 확인해요.`,
         meta: `${formatDistance(directDistance)} · 약 ${walkOnlyMinutes}분`,
         startPoint: liveCoords?.user,
@@ -915,6 +917,7 @@ export default function Route_() {
             routeMode={isWalkOnlyRoute ? 'walk' : 'transit'}
             currentStepIndex={activeGuideIndex}
             onStepSelect={setCurrentGuideStep}
+            onStartRequest={() => openPointEditor('start')}
             onCoordsReady={handleCoordsReady}
           />
         </div>

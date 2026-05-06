@@ -96,6 +96,17 @@ function stationDotHtml(step, name, active) {
   `
 }
 
+function stepEndOverlayHtml(step) {
+  const style = STEP_STYLE[step?.type] || STEP_STYLE.walk
+  const label = step?.type === 'bus' ? '내릴 곳' : step?.type === 'subway' ? '내릴 역' : '도보 끝'
+  return `
+    <div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 4px 10px rgba(15,23,42,0.22));">
+      <div style="background:#fff;color:${style.color};border:2px solid ${style.color};border-radius:999px;padding:5px 9px;font-size:12px;font-weight:900;font-family:'Pretendard Variable','맑은 고딕',sans-serif;white-space:nowrap;">${label}</div>
+      <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid ${style.color};margin-top:-1px;"></div>
+    </div>
+  `
+}
+
 function drawRouteGuideLine(kakao, map, path, source, active = false) {
   const styles = {
     walk: { color: '#2563EB', weight: 5, opacity: 0.78, style: 'shortdash' },
@@ -231,6 +242,44 @@ function mapStepItems(routeGuide, routeMode) {
   return []
 }
 
+function stepMetaLabel(step) {
+  if (!step) return ''
+  if (step.meta) return step.meta
+  const parts = []
+  if (step.sectionTime) parts.push(`${step.sectionTime}분`)
+  if (step.type === 'walk' && Number(step.distance) > 0) parts.push(distanceLabel(step.distance))
+  if (step.type === 'bus' && step.stationCount) parts.push(`${step.stationCount}정류장`)
+  if (step.type === 'subway' && step.stationCount) parts.push(`${step.stationCount}개 역`)
+  return parts.filter(Boolean).join(' · ')
+}
+
+function stepEndpointText(step) {
+  if (!step) return ''
+  if (step.detail) return step.detail
+  const start = step.startStationName || step.startName || (step.type === 'walk' ? '출발지' : '타는 곳')
+  const end = step.endName || (step.type === 'walk' ? '다음 지점' : '내릴 곳')
+  if (step.type === 'walk') return `${start}에서 ${end}까지 걸어요.`
+  if (step.type === 'bus') return `${start}에서 타고 ${end}에서 내리세요.`
+  return `${start}에서 ${step.way ? `${step.way} 방면으로 ` : ''}타고 ${end}에서 내리세요.`
+}
+
+function stepActionTitle(step) {
+  if (!step) return '경로 확인'
+  if (step.title) return step.title
+  if (step.type === 'walk') return `${distanceLabel(step.distance) || ''} 걷기`.trim()
+  if (step.type === 'bus') return `${routeStepLabel(step)} 버스 타기`
+  return `${routeStepLabel(step)} 타기`
+}
+
+function stepStopPreview(step) {
+  if (!step || step.type === 'walk') return ''
+  const stops = (step.passStops || []).filter(Boolean)
+  if (!stops.length) return ''
+  const label = step.type === 'subway' ? '지나는 역' : '지나는 정류장'
+  const preview = stops.slice(0, 5).join(' → ')
+  return stops.length > 5 ? `${label}: ${preview} 외 ${stops.length - 5}곳` : `${label}: ${preview}`
+}
+
 function pickStationDots(step, active) {
   const points = (step?.passStopPoints || []).filter(point =>
     Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))
@@ -261,6 +310,7 @@ export default function RouteMap({
   routeMode = 'guide',
   currentStepIndex = 0,
   onStepSelect,
+  onStartRequest,
   onCoordsReady,
 }) {
   const mapDivRef   = useRef(null)
@@ -271,6 +321,7 @@ export default function RouteMap({
   const [status, setStatus]     = useState('loading')
   const [distInfo, setDistInfo] = useState(null)
   const [locationNote, setLocationNote] = useState('')
+  const [focusMode, setFocusMode] = useState('step')
 
   useEffect(() => {
     if (!mapDivRef.current) return
@@ -327,6 +378,7 @@ export default function RouteMap({
           center: new kakao.maps.LatLng(SEOUL_CENTER.lat, SEOUL_CENTER.lng),
           level: 5,
         })
+        map.addControl(new kakao.maps.ZoomControl(), kakao.maps.ControlPosition.RIGHT)
         mapRef.current = map
 
         // 목적지 좌표 확정 후 공통 처리
@@ -376,6 +428,7 @@ export default function RouteMap({
               { lat: destLat, lng: destLng },
             ]
             const segments = createRouteGuideSegments(kakao, basePoints, routeGuide, routeMode)
+            const activeSegment = segments.find(segment => segment.index === currentStepIndex) || segments[0]
             segments.forEach(segment => {
               if (segment.path.length >= 2) {
                 const active = segment.index === currentStepIndex
@@ -389,6 +442,17 @@ export default function RouteMap({
                 })
                 stepOverlay.setMap(map)
                 overlayRef.current.push(stepOverlay)
+
+                if (active && segment.path.length >= 2) {
+                  const endOverlay = new kakao.maps.CustomOverlay({
+                    position: segment.path[segment.path.length - 1],
+                    content: stepEndOverlayHtml(segment.step),
+                    yAnchor: 1.15,
+                    zIndex: 28,
+                  })
+                  endOverlay.setMap(map)
+                  overlayRef.current.push(endOverlay)
+                }
 
                 if (segment.step?.type !== 'walk') {
                   pickStationDots(segment.step, active).forEach(point => {
@@ -406,21 +470,24 @@ export default function RouteMap({
             })
 
             const bounds = new kakao.maps.LatLngBounds()
-            const boundsPath = segments.length
+            const focusStep = focusMode === 'step' && activeSegment?.path?.length >= 2
+            const boundsPath = focusStep
+              ? activeSegment.path
+              : segments.length
               ? segments.flatMap(segment => segment.path)
               : [startLatLng, destLatLng]
             boundsPath.forEach(point => bounds.extend(point))
-            map.setBounds(bounds, 60, 60, 60, 60)
+            map.setBounds(bounds, focusStep ? 86 : 60, focusStep ? 74 : 60, focusStep ? 86 : 60, focusStep ? 74 : 60)
 
             const dist = Math.round(getRouteDistance(basePoints) * 1.35)
             const duration = estimateDuration(dist)
 
             setDistInfo({ dist, duration })
             setLocationNote(routeMode === 'walk'
-              ? '가까운 거리는 도보 중심으로 안내해요. 파란 점선과 단계 번호를 보며 아래 안내를 함께 확인하세요.'
+              ? '현재 도보 구간을 크게 보여줘요. 전체 경로가 필요하면 전체 보기를 누르세요.'
               : routeGuide?.steps?.length
-                ? '공공데이터와 ODsay 경로의 정류장·역 좌표를 구간별로 표시해요. 번호와 아래 전체 경로를 함께 따라가세요.'
-                : '지도 선은 직선 기준 참고선이에요. 정확한 순서는 위 전체 경로를 따르세요.'
+                ? '현재 단계 위주로 확대돼요. 정류장·역 번호와 아래 안내를 함께 따라가세요.'
+                : '지도 선은 좌표 기준 참고선이에요. 정확한 순서는 아래 전체 경로를 따르세요.'
             )
             onCoordsReady?.({
               user: { lat: start.lat, lng: start.lng },
@@ -490,13 +557,19 @@ export default function RouteMap({
       polylineRef.current.forEach(line => { try { line.setMap(null) } catch {} })
       polylineRef.current = []
     }
-  }, [destination, searchKeyword, placeCoords, startPlace, viaPlace, routeGuide, routeMode, currentStepIndex])
+  }, [destination, searchKeyword, placeCoords, startPlace, viaPlace, routeGuide, routeMode, currentStepIndex, focusMode])
 
   const routeDistance = Number(routeGuide?.totalDistance) > 0 ? Number(routeGuide.totalDistance) : distInfo?.dist
   const routeDuration = Number(routeGuide?.totalTime) > 0 ? Number(routeGuide.totalTime) : distInfo?.duration
   const hasRouteMetrics = Number(routeGuide?.totalDistance) > 0 || Number(routeGuide?.totalTime) > 0
   const routeDistanceText = distanceLabel(routeDistance)
   const stepsForMap = mapStepItems(routeGuide, routeMode)
+  const hasStartForMap = Boolean(distInfo || (startPlace?.lat && startPlace?.lng))
+  const safeStepIndex = stepsForMap.length ? Math.min(currentStepIndex, stepsForMap.length - 1) : 0
+  const activeMapStep = stepsForMap[safeStepIndex]
+  const activeStepStyle = STEP_STYLE[activeMapStep?.type] || STEP_STYLE.walk
+  const activeStopPreview = stepStopPreview(activeMapStep)
+  const canFocusStep = hasStartForMap && stepsForMap.length > 1
 
   return (
     <div style={{
@@ -506,7 +579,7 @@ export default function RouteMap({
     }}>
       <div style={{
         padding: '13px 16px', borderBottom: '1px solid #F8FAFC',
-        display: 'flex', alignItems: 'center', gap: 8,
+        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
       }}>
         <svg width={16} height={16} viewBox="0 0 24 24" fill="none"
           stroke="#0F172A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -548,10 +621,41 @@ export default function RouteMap({
             </span>
           )}
         </div>
+
+        {canFocusStep && (
+          <div style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+            {[
+              { value: 'step', label: '현재 단계 크게' },
+              { value: 'all', label: '전체 경로 보기' },
+            ].map(mode => {
+              const active = focusMode === mode.value
+              return (
+                <button
+                  key={mode.value}
+                  type="button"
+                  onClick={() => setFocusMode(mode.value)}
+                  style={{
+                    minHeight: 38,
+                    borderRadius: 12,
+                    border: active ? '1.5px solid #0D9488' : '1px solid #E2E8F0',
+                    background: active ? '#F0FDFA' : '#fff',
+                    color: active ? '#0F766E' : '#475569',
+                    fontSize: 13,
+                    fontWeight: 950,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {mode.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       <div style={{ position: 'relative' }}>
-        <div ref={mapDivRef} style={{ height: 250 }} />
+        <div ref={mapDivRef} style={{ height: 320 }} />
 
         {status === 'loading' && (
           <div style={{
@@ -595,9 +699,118 @@ export default function RouteMap({
             <span style={{ fontSize: 13, color: '#94A3B8' }}>장소를 찾을 수 없어요</span>
           </div>
         )}
+
+        {!hasStartForMap && status === 'ready' && (
+          <div style={{
+            position: 'absolute',
+            left: 12,
+            right: 12,
+            bottom: 14,
+            background: 'rgba(255,251,235,0.97)',
+            border: '1.5px solid #FED7AA',
+            borderRadius: 16,
+            padding: 12,
+            boxShadow: '0 12px 26px rgba(146,64,14,0.18)',
+            zIndex: 40,
+            pointerEvents: 'auto',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+              <div style={{
+                width: 34,
+                height: 34,
+                borderRadius: 13,
+                background: '#FFF7ED',
+                color: '#D97706',
+                border: '1px solid #FED7AA',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 18,
+                fontWeight: 950,
+                flexShrink: 0,
+              }}>
+                📍
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <p style={{ fontSize: 15, fontWeight: 950, color: '#92400E', margin: '0 0 3px', lineHeight: 1.25 }}>
+                  출발지를 지정하면 경로선이 보여요
+                </p>
+                <p style={{ fontSize: 12, fontWeight: 800, color: '#B45309', margin: 0, lineHeight: 1.4 }}>
+                  서울역처럼 출발지를 검색해 실제 정류장·도보 구간을 확인하세요.
+                </p>
+              </div>
+            </div>
+            {onStartRequest && (
+              <button
+                type="button"
+                onClick={onStartRequest}
+                style={{
+                  width: '100%',
+                  minHeight: 42,
+                  marginTop: 10,
+                  border: 'none',
+                  borderRadius: 12,
+                  background: '#D97706',
+                  color: '#fff',
+                  fontSize: 14,
+                  fontWeight: 950,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                출발지 지정하기
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {stepsForMap.length > 0 && (
+      {hasStartForMap && activeMapStep && (
+        <div style={{ padding: '12px 14px', borderTop: '1px solid #F1F5F9', background: '#FFFFFF' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '38px 1fr', gap: 10, alignItems: 'start' }}>
+            <div style={{
+              width: 38,
+              height: 38,
+              borderRadius: 14,
+              background: activeStepStyle.bg,
+              color: activeStepStyle.color,
+              border: `1px solid ${activeStepStyle.border}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 20,
+              fontWeight: 950,
+            }}>
+              {activeStepStyle.icon}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+                <span style={{ color: activeStepStyle.color, background: activeStepStyle.bg, border: `1px solid ${activeStepStyle.border}`, borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 950 }}>
+                  {safeStepIndex + 1}단계
+                </span>
+                {stepMetaLabel(activeMapStep) && (
+                  <span style={{ color: '#64748B', fontSize: 12, fontWeight: 850 }}>
+                    {stepMetaLabel(activeMapStep)}
+                  </span>
+                )}
+              </div>
+              <p style={{ fontSize: 17, fontWeight: 950, color: '#0F172A', margin: '0 0 3px', lineHeight: 1.25 }}>
+                {stepActionTitle(activeMapStep)}
+              </p>
+              <p style={{ fontSize: 13, fontWeight: 800, color: '#475569', margin: 0, lineHeight: 1.45 }}>
+                {stepEndpointText(activeMapStep)}
+              </p>
+              {activeStopPreview && (
+                <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748B', fontWeight: 800, lineHeight: 1.45 }}>
+                  {activeStopPreview}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hasStartForMap && stepsForMap.length > 0 && (
         <div style={{ padding: '11px 14px 10px', borderTop: '1px solid #F1F5F9', background: '#FBFDFF' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <p style={{ fontSize: 12, fontWeight: 950, color: '#0F172A', margin: 0 }}>지도에서 보는 순서</p>
