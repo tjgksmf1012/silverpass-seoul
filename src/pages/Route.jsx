@@ -166,27 +166,6 @@ function getRouteCriteria(route, index, routes = [], profile = {}) {
   return { label: route.pathTypeLabel || '대안 경로', short: '대안', desc: '다른 이동 방식을 선택할 수 있는 경로', color: '#64748B' }
 }
 
-function kakaoPoint(name, point) {
-  const lat = Number(point?.lat)
-  const lng = Number(point?.lng)
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
-  const label = encodeURIComponent(String(name || point?.name || '목적지').replace(/[/?#]/g, ' ').trim())
-  return `${label},${lat.toFixed(6)},${lng.toFixed(6)}`
-}
-
-function buildKakaoRouteUrl({ start, dest, via, by = 'traffic' }) {
-  const startPart = kakaoPoint(start?.name || '출발지', start)
-  const destPart = kakaoPoint(dest?.name || '목적지', dest)
-  if (!startPart || !destPart) return null
-  const viaPart = by !== 'traffic' ? kakaoPoint(via?.name || '경유지', via) : null
-  return `https://map.kakao.com/link/by/${by}/${[startPart, viaPart, destPart].filter(Boolean).join('/')}`
-}
-
-function buildKakaoMapUrl(place) {
-  const part = kakaoPoint(place?.name || '목적지', place)
-  return part ? `https://map.kakao.com/link/map/${part}` : null
-}
-
 function lineText(lines = []) {
   return lines.map(line => line.busNo || line.name).filter(Boolean).join(', ')
 }
@@ -195,8 +174,13 @@ function busLineText(lines = []) {
   return lines.map(line => line.busNo ? `${line.busNo}번` : line.name).filter(Boolean).join(', ')
 }
 
-function hasPoint(point) {
-  return Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))
+function summarizeStops(stops = [], limit = 4) {
+  const clean = stops.filter(Boolean)
+  if (clean.length <= 2) return ''
+  const middle = clean.slice(1, -1)
+  const shown = middle.slice(0, limit)
+  if (!shown.length) return ''
+  return `${shown.join(' → ')}${middle.length > limit ? ' → ...' : ''}`
 }
 
 export default function Route_() {
@@ -225,6 +209,7 @@ export default function Route_() {
   const [destinationResolving, setDestinationResolving] = useState(false)
   const [destinationResolveNote, setDestinationResolveNote] = useState('')
   const coordsApplied = useRef(false)
+  const guideSectionRef = useRef(null)
 
   const profile = getProfile()
   const routeRequestText = state?.parsed?.destination || state?.parsed?.address || state?.query || ''
@@ -663,54 +648,38 @@ export default function Route_() {
     return steps
   })()
   const fullRouteSteps = isWalkOnlyRoute ? fallbackRouteSteps : (hasExactRoute ? bestRoute.steps : fallbackRouteSteps)
-  const kakaoStart = liveCoords?.user
-    ? { ...liveCoords.user, name: startDisplay || '출발지' }
-    : (manualStart ? { ...manualStart, name: manualStart.name || '출발지' } : null)
-  const kakaoDest = liveCoords?.dest
-    ? { ...liveCoords.dest, name: destination }
-    : (placeCoords ? { ...placeCoords, name: destination } : null)
-  const kakaoTransitUrl = buildKakaoRouteUrl({ start: kakaoStart, dest: kakaoDest, by: 'traffic' })
-  const kakaoWalkUrl = buildKakaoRouteUrl({ start: kakaoStart, dest: kakaoDest, by: 'walk' })
-  const kakaoDestUrl = buildKakaoMapUrl(kakaoDest)
-  const kakaoPrimaryUrl = isWalkOnlyRoute ? (kakaoWalkUrl || kakaoDestUrl) : (kakaoTransitUrl || kakaoDestUrl)
   const guideSteps = fullRouteSteps.map((step, index) => {
     if (step.type === 'walk') {
       const walkText = getWalkText(step, index, fullRouteSteps)
-      const walkStart = hasPoint(step.startPoint) ? { ...step.startPoint, name: index === 0 ? startDisplay : '도보 시작' } : null
-      const walkDest = hasPoint(step.endPoint) ? { ...step.endPoint, name: walkText.title.replace(/까지 걷기$/, '') || '도보 도착' } : null
-      const actionUrl = buildKakaoRouteUrl({ start: walkStart, dest: walkDest, by: 'walk' })
       return {
         icon: '🚶',
         title: walkText.title,
         body: walkText.detail,
         meta: walkText.meta,
-        actionUrl,
-        actionLabel: '이 구간 도보 안내',
+        detail: '지도 점선과 목적지 표식을 보면서 천천히 이동하세요.',
         speak: `${index + 1}단계. ${walkText.title}. ${walkText.meta || ''}. ${walkText.detail}`,
       }
     }
     if (step.type === 'bus') {
       const buses = busLineText(step.lines)
       const meta = [step.sectionTime ? `${step.sectionTime}분` : '', step.stationCount ? `${step.stationCount}정류장` : ''].filter(Boolean).join(', ')
+      const stopText = summarizeStops(step.passStops)
       return {
         icon: '🚌',
         title: `${buses || '버스'} 타기`,
-        body: `${step.startStationName || step.startName || '승차 정류장'} 정류장에서 타고 ${step.endName || '도착 정류장'} 정류장에서 내리세요.`,
+        body: `${step.startStationName || step.startName || '승차 정류장'} 정류장에서 타고 ${step.endName || '도착 정류장'} 정류장에서 내리세요.${stopText ? ` 중간에 ${stopText}를 지나요.` : ''}`,
         meta,
-        actionUrl: null,
-        actionLabel: '',
         speak: `${index + 1}단계. ${buses || '버스'}를 탑니다. ${step.startStationName || step.startName || '승차 정류장'} 정류장에서 타고 ${step.endName || '도착 정류장'} 정류장에서 내리세요. ${meta}`,
       }
     }
     const rails = lineText(step.lines)
     const meta = [step.sectionTime ? `${step.sectionTime}분` : '', step.stationCount ? `${step.stationCount}개 역` : ''].filter(Boolean).join(', ')
+    const stopText = summarizeStops(step.passStops)
     return {
       icon: '🚇',
       title: `${rails || '지하철'} 타기`,
-      body: `${step.startName || '출발역'}에서 ${step.way ? `${step.way} 방면으로 ` : ''}타고 ${step.endName || '도착역'}에서 내리세요.`,
+      body: `${step.startName || '출발역'}에서 ${step.way ? `${step.way} 방면으로 ` : ''}타고 ${step.endName || '도착역'}에서 내리세요.${stopText ? ` 중간에 ${stopText}를 지나요.` : ''}`,
       meta,
-      actionUrl: null,
-      actionLabel: '',
       speak: `${index + 1}단계. ${rails || '지하철'}을 탑니다. ${step.startName || '출발역'}에서 ${step.way ? `${step.way} 방면으로 ` : ''}타고 ${step.endName || '도착역'}에서 내리세요. ${meta}`,
     }
   })
@@ -725,6 +694,14 @@ export default function Route_() {
     utterance.rate = 0.86
     utterance.pitch = 0.95
     window.speechSynthesis.speak(utterance)
+  }
+
+  function startInAppGuide() {
+    setCurrentGuideStep(0)
+    requestAnimationFrame(() => {
+      guideSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+    if (guideSteps[0]) speakGuideStep(guideSteps[0])
   }
 
   return (
@@ -1014,33 +991,20 @@ export default function Route_() {
               <div style={{ background: '#F0FDFA', border: '1.5px solid #99F6E4', borderRadius: 16, padding: 14, marginBottom: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                   <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#0D9488', boxShadow: '0 0 0 4px #CCFBF1', flexShrink: 0 }} />
-                  <p style={{ fontSize: 15, fontWeight: 950, color: '#0F172A', margin: 0 }}>정확 안내 시작</p>
+                  <p style={{ fontSize: 15, fontWeight: 950, color: '#0F172A', margin: 0 }}>앱 안에서 상세 안내</p>
                 </div>
                 <p style={{ fontSize: 13, fontWeight: 750, color: '#0F766E', lineHeight: 1.5, margin: '0 0 12px' }}>
                   {isWalkOnlyRoute
-                    ? '가까운 거리는 대중교통보다 도보가 더 단순해요. 공공데이터로 대기질과 안전 정보를 확인하고, 골목 방향은 카카오맵 도보 안내를 함께 보세요.'
-                    : '정류장까지 걷는 길과 골목 방향은 카카오맵에서 자세히 안내받으세요. 아래 큰 글씨 안내는 함께 확인해요.'}
+                    ? '이 화면에서 도보 거리, 대기질, 쉬어가기 정보를 보며 이동해요. 지도 점선은 방향 참고용이고 아래 안내를 차례대로 따라가세요.'
+                    : '이 화면에서 걷기, 탑승, 하차, 환승 순서를 모두 확인해요. 버스·지하철 실시간 정보와 공공데이터 조건도 함께 반영돼요.'}
                 </p>
-                <div style={{ display: 'grid', gridTemplateColumns: kakaoPrimaryUrl && kakaoTransitUrl && !isWalkOnlyRoute ? '1fr auto' : '1fr', gap: 8 }}>
-                  {kakaoPrimaryUrl ? (
-                    <a href={kakaoPrimaryUrl} target="_blank" rel="noreferrer" style={{ minHeight: 52, borderRadius: 14, background: '#0D9488', color: '#fff', textDecoration: 'none', fontSize: 17, fontWeight: 950, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 14px', textAlign: 'center' }}>
-                      {isWalkOnlyRoute ? '카카오맵 도보 안내 열기' : kakaoTransitUrl ? '카카오맵 길안내 열기' : '목적지 지도 열기'}
-                    </a>
-                  ) : (
-                    <div style={{ minHeight: 52, borderRadius: 14, background: '#E2E8F0', color: '#64748B', fontSize: 15, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 14px', textAlign: 'center' }}>
-                      출발지 확인 후 정확 안내 가능
-                    </div>
-                  )}
-                  {kakaoTransitUrl && kakaoDestUrl && !isWalkOnlyRoute && (
-                    <a href={kakaoDestUrl} target="_blank" rel="noreferrer" style={{ minHeight: 52, borderRadius: 14, border: '1.5px solid #99F6E4', background: '#fff', color: '#0F766E', textDecoration: 'none', fontSize: 13, fontWeight: 950, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 12px', whiteSpace: 'nowrap' }}>
-                      위치 보기
-                    </a>
-                  )}
-                </div>
+                <button onClick={startInAppGuide} style={{ width: '100%', minHeight: 56, borderRadius: 14, border: 'none', background: '#0D9488', color: '#fff', fontSize: 18, fontWeight: 950, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 14px', textAlign: 'center', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  앱 안에서 안내 시작
+                </button>
               </div>
 
               {activeGuide && (
-                <div style={{ background: '#0F172A', borderRadius: 18, padding: 16, marginBottom: 14, color: '#fff', boxShadow: '0 12px 28px rgba(15,23,42,0.20)' }}>
+                <div ref={guideSectionRef} style={{ background: '#0F172A', borderRadius: 18, padding: 16, marginBottom: 14, color: '#fff', boxShadow: '0 12px 28px rgba(15,23,42,0.20)', scrollMarginTop: 96 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                     <p style={{ fontSize: 13, fontWeight: 950, color: '#99F6E4', margin: 0 }}>지금 따라가기</p>
                     <span style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.16)', borderRadius: 20, padding: '4px 9px', fontSize: 12, fontWeight: 950 }}>
@@ -1068,10 +1032,10 @@ export default function Route_() {
                       다음
                     </button>
                   </div>
-                  {activeGuide.actionUrl && (
-                    <a href={activeGuide.actionUrl} target="_blank" rel="noreferrer" style={{ marginTop: 8, minHeight: 46, borderRadius: 14, background: '#fff', color: '#0F766E', textDecoration: 'none', fontSize: 15, fontWeight: 950, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {activeGuide.actionLabel}
-                    </a>
+                  {activeGuide.detail && (
+                    <p style={{ margin: '10px 0 0', fontSize: 13, fontWeight: 800, color: '#BAE6FD', lineHeight: 1.45 }}>
+                      {activeGuide.detail}
+                    </p>
                   )}
                 </div>
               )}
@@ -1094,7 +1058,6 @@ export default function Route_() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {fullRouteSteps.map((step, i) => {
                   const walkText = step.type === 'walk' ? getWalkText(step, i, fullRouteSteps) : null
-                  const stepGuide = guideSteps[i]
                   return (
                     <div key={`${step.type}-${i}`} style={{ display: 'grid', gridTemplateColumns: '34px 1fr', gap: 10, alignItems: 'stretch' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -1112,11 +1075,6 @@ export default function Route_() {
                             {walkText.meta && <span style={{ fontSize: 12, color: '#64748B', marginLeft: 'auto', fontWeight: 800 }}>{walkText.meta}</span>}
                           </div>
                           <p style={{ fontSize: 13, color: '#64748B', margin: 0, lineHeight: 1.45 }}>{walkText.detail}</p>
-                          {stepGuide?.actionUrl && (
-                            <a href={stepGuide.actionUrl} target="_blank" rel="noreferrer" style={{ marginTop: 10, minHeight: 42, borderRadius: 12, background: '#E0F2FE', color: '#0369A1', textDecoration: 'none', fontSize: 14, fontWeight: 950, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              카카오맵 도보 안내
-                            </a>
-                          )}
                         </div>
                       ) : step.type === 'bus' ? (
                         <div style={{ background: '#F8F9FA', borderRadius: 14, padding: '13px 14px', border: '1px solid #E2E8F0' }}>
@@ -1139,6 +1097,14 @@ export default function Route_() {
                             <span style={{ fontWeight: 700, color: '#059669' }}>{step.startStationName || step.startName}</span>
                             {' '} 승차 → <span style={{ fontWeight: 700 }}>{step.endName}</span> 하차
                           </p>
+                          {summarizeStops(step.passStops) && (
+                            <div style={{ marginTop: 9, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: '9px 10px' }}>
+                              <p style={{ fontSize: 11, color: '#64748B', fontWeight: 900, margin: '0 0 4px' }}>지나는 정류장</p>
+                              <p style={{ fontSize: 12, color: '#334155', fontWeight: 800, margin: 0, lineHeight: 1.45 }}>
+                                {summarizeStops(step.passStops, 6)}
+                              </p>
+                            </div>
+                          )}
                           {/* 이 정류장 실시간 버스 도착 */}
                           {i === firstBusStepIndex && realtimeBus?.length > 0 && (
                             <div style={{ marginTop: 10, background: '#fff', borderRadius: 10, padding: '10px 12px', border: '1px solid #E2E8F0' }}>
@@ -1180,6 +1146,14 @@ export default function Route_() {
                             {step.way && <span style={{ color: '#94A3B8' }}> ({step.way} 방면)</span>}
                             {' '} → <span style={{ fontWeight: 700 }}>{step.endName}</span>
                           </p>
+                          {summarizeStops(step.passStops) && (
+                            <div style={{ marginTop: 9, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: '9px 10px' }}>
+                              <p style={{ fontSize: 11, color: '#64748B', fontWeight: 900, margin: '0 0 4px' }}>지나는 역</p>
+                              <p style={{ fontSize: 12, color: '#334155', fontWeight: 800, margin: 0, lineHeight: 1.45 }}>
+                                {summarizeStops(step.passStops, 6)}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

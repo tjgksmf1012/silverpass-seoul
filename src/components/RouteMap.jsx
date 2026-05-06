@@ -294,9 +294,9 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
 
             setDistInfo({ dist, duration })
             setLocationNote(routeMode === 'walk'
-              ? '가까운 거리는 도보 중심으로 안내해요. 파란 점선은 도보 방향 참고선이고, 정확한 골목 안내는 카카오맵 도보 안내를 함께 확인하세요.'
+              ? '가까운 거리는 도보 중심으로 안내해요. 파란 점선은 도보 방향 참고선이고, 아래 단계별 안내를 함께 확인하세요.'
               : routeGuide?.steps?.length
-                ? '공공데이터로 확인한 조건을 함께 반영해 도보·버스·지하철 구간별로 표시해요. 도보 골목길은 카카오맵 안내를 함께 확인하세요.'
+                ? '공공데이터로 확인한 조건을 함께 반영해 도보·버스·지하철 구간별로 표시해요. 자세한 순서는 아래 단계별 안내를 따르세요.'
                 : '지도 선은 직선 기준 참고선이에요. 정확한 순서는 위 전체 경로를 따르세요.'
             )
             onCoordsReady?.({
