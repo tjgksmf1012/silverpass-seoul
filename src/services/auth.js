@@ -68,12 +68,36 @@ export async function signInWithEmail(email, password) {
   if (error) throw new Error(error.message)
   const id = data.user.id
   const name = data.user.user_metadata?.name || '사용자'
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', id).maybeSingle()
-  if (profile?.role) localStorage.setItem(ROLE_KEY, profile.role)
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('name, phone, role')
+    .eq('id', id)
+    .maybeSingle()
+
+  // 이메일 계정은 보호자 진입에서만 사용합니다. 시연 DB 초기화로 public.profiles만
+  // 삭제되어도 기존 Supabase Auth 계정이 보호자 역할을 회복하도록 보정합니다.
+  const role = 'guardian'
+  await withTimeout(
+    supabase.from('profiles').upsert({
+      id,
+      name: profile?.name || name,
+      thumbnail: '',
+      role,
+      phone: profile?.phone || '',
+    }, { onConflict: 'id' }),
+    '프로필을 복구하는 중이에요. 잠시 후 다시 시도해 주세요.'
+  )
+  localStorage.setItem(ROLE_KEY, role)
   const user = { id, name, thumbnail: '', provider: 'email' }
-  claimLocalProfile(user, profile?.role || 'user')
+  const localProfile = getProfile()
+  saveProfile({
+    ...localProfile,
+    name: profile?.name || name,
+    guardianPhone: profile?.phone || localProfile.guardianPhone,
+  })
+  claimLocalProfile(user, role)
   saveLocalUser(user)
-  return { ...user, role: profile?.role || null }
+  return { ...user, role }
 }
 
 // 카카오 로그인

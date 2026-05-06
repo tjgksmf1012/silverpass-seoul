@@ -74,7 +74,7 @@ export default function Login() {
     try {
       const { signIn, setRole } = await import('../services/auth.js')
       const user = await signIn()
-      if (!getRole() && user?.id) await setRole(user.id, 'guardian')
+      if (user?.id) await setRole(user.id, 'guardian')
       goHome()
     }
     catch (e) { setError(e.message || '카카오 로그인에 실패했어요') }
