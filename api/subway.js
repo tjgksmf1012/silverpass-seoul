@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   const { station } = req.query
   if (!station) return res.status(400).json({ error: 'station required' })
 
-  const key = process.env.SEOUL_API_KEY
+  const key = process.env.SEOUL_SUBWAY_API_KEY || process.env.SEOUL_API_KEY
   if (!key || key === 'DEMO') {
     return res.status(200).json({ _demo: true })
   }
