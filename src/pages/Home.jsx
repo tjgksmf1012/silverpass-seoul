@@ -78,7 +78,8 @@ export default function Home() {
     getAirQuality(extractDistrict(p.homeAddress) || p.district || '종로구').then(setAirNow)
 
     const user = currentUser
-    if (user?.role === 'user') {
+    const isRouteUser = user?.role !== 'guardian' || user.provider === 'guest' || user.provider === 'invite'
+    if (user && isRouteUser) {
       getElderInfo(user.id).then(info => {
         const local = getProfile()
         const profileOwner = local.ownerId && String(local.ownerId) === String(user.id)

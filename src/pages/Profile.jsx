@@ -16,7 +16,7 @@ export default function Profile() {
   const kakaoUser = getKakaoUser()
   const currentUser = getCurrentUser()
   const provider = currentUser?.provider
-  const isGuardian = currentUser?.role === 'guardian'
+  const isGuardian = currentUser?.role === 'guardian' && provider !== 'guest' && provider !== 'invite'
   const isRouteUser = !isGuardian
   const [linkedGuardian, setLinkedGuardian] = useState(null)
 

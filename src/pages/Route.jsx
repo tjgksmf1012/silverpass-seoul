@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { getProfile, addHistory } from '../services/storage.js'
 import { getRouteData, getRealtimeSubwayArrival } from '../services/seoulApi.js'
 import { generateSubwayGuide } from '../services/claude.js'
-import { searchPlaces } from '../services/kakaoSearch.js'
+import { searchPlaces, findKnownSeoulPlace } from '../services/kakaoSearch.js'
 import { searchTransitRoute, getRealtimeBusInfo, formatArrivalTime, pathTypeIcon } from '../services/odsayApi.js'
 import { getCurrentUser, getElderInfo, saveHistory, getLinkedGuardian } from '../services/auth.js'
 import { ArrowLeft, BusIcon, ElevatorIcon, WindIcon,
@@ -190,18 +190,25 @@ export default function Route_() {
 
   const profile = getProfile()
   const baseDestination = state?.parsed?.destination || state?.query || '목적지'
-  const destinationCategory = state?.parsed?.category || ''
-  const hasFixedDestination = Boolean(state?.parsed?.address || (state?.parsed?.lat && state?.parsed?.lng))
-  const destination = resolvedDestinationPlace?.name || baseDestination
-  const destinationSearchKeyword = resolvedDestinationPlace?.address || state?.parsed?.address || destination
+  const knownDestinationPlace = useMemo(
+    () => findKnownSeoulPlace(state?.parsed?.address || baseDestination),
+    [state?.parsed?.address, baseDestination]
+  )
+  const destinationCategory = state?.parsed?.category || knownDestinationPlace?.category || ''
+  const hasFixedDestination = Boolean(state?.parsed?.address || (state?.parsed?.lat && state?.parsed?.lng) || knownDestinationPlace)
+  const destination = resolvedDestinationPlace?.name || knownDestinationPlace?.name || baseDestination
+  const destinationSearchKeyword = resolvedDestinationPlace?.address || knownDestinationPlace?.address || state?.parsed?.address || destination
   const placeCoords = useMemo(() => {
     if (hasCoords(resolvedDestinationPlace)) {
       return { lat: resolvedDestinationPlace.lat, lng: resolvedDestinationPlace.lng }
     }
+    if (hasCoords(knownDestinationPlace)) {
+      return { lat: knownDestinationPlace.lat, lng: knownDestinationPlace.lng }
+    }
     return (state?.parsed?.lat && state?.parsed?.lng)
       ? { lat: state.parsed.lat, lng: state.parsed.lng }
       : null
-  }, [resolvedDestinationPlace, state?.parsed?.lat, state?.parsed?.lng])
+  }, [resolvedDestinationPlace, knownDestinationPlace, state?.parsed?.lat, state?.parsed?.lng])
 
   function resetTransitRoute() {
     coordsApplied.current = false
@@ -441,12 +448,12 @@ export default function Route_() {
   const startDisplay = manualStart?.name || routeData?.startLabel || '현재 위치'
   const routeBadge = hasExactRoute
     ? (isManualRoute ? '직접 지정 경로' : 'ODsay 실시간')
-    : (manualStart ? '출발지 반영' : '위치 허용 필요')
+    : (manualStart ? '좌표 기준 안내' : '위치 허용 필요')
   const noExactTitle = manualStart
-    ? '선택한 출발지 기준으로 경로를 준비 중이에요'
+    ? '선택한 출발지 기준으로 안내 중이에요'
     : '정확한 정류장·환승 순서는 위치 허용 후 표시돼요'
   const noExactBody = manualStart
-    ? '주소 좌표를 기준으로 다시 계산합니다. 경로 API 결과가 오면 걷기, 버스, 지하철 순서로 바뀝니다.'
+    ? '정확한 대중교통 경로가 확인되면 정류장·환승 순서로 자동 보강돼요. 지금은 거리와 기본 이동 순서를 먼저 보여드려요.'
     : '현재는 기본 안내입니다. 위치를 허용하면 몇 분 걷고, 몇 번 버스나 어떤 지하철을 타는지 전체 순서로 바뀝니다.'
 
   const formatDistance = (meters) => {
@@ -690,7 +697,7 @@ export default function Route_() {
                   : <>{routeData?.walkDistance}<span style={{ fontSize: 12 }}>m</span></>
                 }
               </p>
-              {isLive && <p style={{ fontSize: 11, color: '#0D9488', margin: '3px 0 0', fontWeight: 800 }}>GPS 측정</p>}
+              {isLive && <p style={{ fontSize: 11, color: '#0D9488', margin: '3px 0 0', fontWeight: 800 }}>{routeData?.coordSource === 'manual' ? '좌표 측정' : 'GPS 측정'}</p>}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>

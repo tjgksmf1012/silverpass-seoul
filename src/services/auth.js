@@ -94,6 +94,9 @@ export function getRole() {
 
 export async function signOut() {
   logoutKakao()
+  if (supabase) {
+    await supabase.auth.signOut().catch(() => {})
+  }
   localStorage.removeItem(ROLE_KEY)
 }
 

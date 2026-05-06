@@ -143,8 +143,8 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
     if (!mapDivRef.current) return
     setDistInfo(null)
     setLocationNote('')
-    if (!KAKAO_KEY) {
-      setStatus('nokey')
+
+    function useCoordinateFallback(message) {
       if (startPlace?.lat && startPlace?.lng && placeCoords?.lat && placeCoords?.lng) {
         const points = [
           { lat: startPlace.lat, lng: startPlace.lng },
@@ -162,7 +162,15 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
           source: 'manual',
           startLabel: startPlace.name,
         })
+      } else if (placeCoords?.lat && placeCoords?.lng) {
+        setDistInfo(null)
       }
+      setStatus(placeCoords?.lat && placeCoords?.lng ? 'fallback' : 'error')
+      setLocationNote(message)
+    }
+
+    if (!KAKAO_KEY) {
+      useCoordinateFallback('지도 키가 없어 좌표 기준으로 안내해요')
       return
     }
 
@@ -300,7 +308,7 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
         }
       })
       .catch(() => {
-        if (!cancelled) setStatus('error')
+        if (!cancelled) useCoordinateFallback('지도 SDK를 불러오지 못해 좌표 기준으로 안내해요')
       })
 
     return () => {
@@ -377,14 +385,22 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
           </div>
         )}
 
-        {status === 'nokey' && (
+        {status === 'fallback' && (
           <div style={{
             position: 'absolute', inset: 0, background: '#F8F9FA',
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center', gap: 6,
+            padding: 18, textAlign: 'center',
           }}>
-            <span style={{ fontSize: 13, color: '#94A3B8' }}>VITE_KAKAO_MAP_KEY 미설정</span>
-            <span style={{ fontSize: 11, color: '#CBD5E1' }}>.env 파일에 카카오 앱키를 추가해주세요</span>
+            <span style={{ fontSize: 18, fontWeight: 900, color: '#0F172A' }}>{destination}</span>
+            {placeCoords?.lat && placeCoords?.lng && (
+              <span style={{ fontSize: 12, color: '#0D9488', fontWeight: 800 }}>
+                좌표 확인됨 · {Number(placeCoords.lat).toFixed(4)}, {Number(placeCoords.lng).toFixed(4)}
+              </span>
+            )}
+            <span style={{ fontSize: 12, color: '#64748B', lineHeight: 1.5 }}>
+              {startPlace ? '출발지와 목적지 좌표로 경로를 계산하고 있어요.' : '출발지를 직접 지정하면 거리와 대중교통 경로를 더 정확히 계산해요.'}
+            </span>
           </div>
         )}
 

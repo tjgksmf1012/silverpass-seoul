@@ -109,8 +109,9 @@ function normalizeHistoryEntry(entry) {
 
 export function addHistory(entry) {
   try {
-    const history = getHistory()
-    history.unshift(normalizeHistoryEntry({ ...entry, timestamp: Date.now() }))
+    const nextEntry = normalizeHistoryEntry({ ...entry, timestamp: Date.now() })
+    const history = getHistory().filter(item => item.destination !== nextEntry.destination)
+    history.unshift(nextEntry)
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 20)))
   } catch {}
 }
