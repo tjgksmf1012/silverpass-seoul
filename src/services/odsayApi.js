@@ -62,6 +62,19 @@ function compactPoints(points) {
   }, [])
 }
 
+function namedStationPoints(stations) {
+  return stations
+    .map(station => {
+      const point = stationPoint(station)
+      if (!point) return null
+      return {
+        ...point,
+        name: station.stationName || station.name || '',
+      }
+    })
+    .filter(Boolean)
+}
+
 // ─── 경로 탐색 ────────────────────────────────────────────────────────────────
 /**
  * @param {number} sx 출발지 경도 (lng)
@@ -141,6 +154,7 @@ function parsePath(path) {
         // 버스
         const lanes = asArray(s.lane)
         const stations = asArray(s.passStopList?.stations)
+        const passStopPoints = namedStationPoints(stations)
         const startPoint = subPathPoint(s, 'start')
         const endPoint = subPathPoint(s, 'end')
         return {
@@ -158,15 +172,17 @@ function parsePath(path) {
           startStationId: stations[0]?.stationID || null,
           startStationName: stations[0]?.stationName || s.startName || '',
           passStops: stations.map(station => station.stationName).filter(Boolean),
+          passStopPoints,
           startPoint,
           endPoint,
-          routePoints: compactPoints([startPoint, ...stations.map(stationPoint), endPoint]),
+          routePoints: compactPoints([startPoint, ...passStopPoints, endPoint]),
           index,
         }
       } else {
         // 지하철
         const lanes = asArray(s.lane)
         const stations = asArray(s.passStopList?.stations)
+        const passStopPoints = namedStationPoints(stations)
         const startPoint = subPathPoint(s, 'start')
         const endPoint = subPathPoint(s, 'end')
         return {
@@ -183,9 +199,10 @@ function parsePath(path) {
           way: s.way || '',
           wayCode: s.wayCode,
           passStops: stations.map(station => station.stationName).filter(Boolean),
+          passStopPoints,
           startPoint,
           endPoint,
-          routePoints: compactPoints([startPoint, ...stations.map(stationPoint), endPoint]),
+          routePoints: compactPoints([startPoint, ...passStopPoints, endPoint]),
           index,
         }
       }

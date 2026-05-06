@@ -684,6 +684,9 @@ export default function Route_() {
   })
   const activeGuideIndex = Math.min(currentGuideStep, Math.max(guideSteps.length - 1, 0))
   const activeGuide = guideSteps[activeGuideIndex]
+  const mapRouteGuide = isWalkOnlyRoute || !hasExactRoute
+    ? { steps: fullRouteSteps, totalDistance: displayPrimaryWalk, totalTime: displayPrimaryTime }
+    : bestRoute
 
   function speakGuideStep(guide) {
     if (!guide || typeof window === 'undefined' || !('speechSynthesis' in window)) return
@@ -879,8 +882,10 @@ export default function Route_() {
             placeCoords={placeCoords}
             startPlace={manualStart}
             viaPlace={viaPlace}
-            routeGuide={bestRoute}
+            routeGuide={mapRouteGuide}
             routeMode={isWalkOnlyRoute ? 'walk' : 'transit'}
+            currentStepIndex={activeGuideIndex}
+            onStepSelect={setCurrentGuideStep}
             onCoordsReady={handleCoordsReady}
           />
         </div>

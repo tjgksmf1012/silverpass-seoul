@@ -8,6 +8,11 @@ const SEOUL_BOUNDS = {
   minLng: 126.734,
   maxLng: 127.269,
 }
+const STEP_STYLE = {
+  walk: { label: '도보', icon: '🚶', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
+  bus: { label: '버스', icon: '🚌', color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' },
+  subway: { label: '지하철', icon: '🚇', color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE' },
+}
 
 let sdkPromise = null
 function loadKakaoSDK() {
@@ -23,10 +28,25 @@ function loadKakaoSDK() {
   return sdkPromise
 }
 
+function escapeHtml(value = '') {
+  return String(value).replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char]))
+}
+
+function shortText(value = '', max = 18) {
+  const text = String(value || '').trim()
+  return text.length > max ? `${text.slice(0, max)}...` : text
+}
+
 function destOverlayHtml(name) {
   return `
     <div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(13,148,136,0.35));">
-      <div style="background:#0D9488;color:#fff;font-size:12px;font-weight:700;font-family:'Pretendard Variable','맑은 고딕',sans-serif;padding:5px 10px;border-radius:20px;white-space:nowrap;border:2px solid #fff;">${name}</div>
+      <div style="background:#0D9488;color:#fff;font-size:12px;font-weight:700;font-family:'Pretendard Variable','맑은 고딕',sans-serif;padding:5px 10px;border-radius:20px;white-space:nowrap;border:2px solid #fff;">${escapeHtml(shortText(name, 20))}</div>
       <div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:10px solid #0D9488;margin-top:-1px;"></div>
     </div>
   `
@@ -35,17 +55,52 @@ function destOverlayHtml(name) {
 function pointOverlayHtml(name, color) {
   return `
     <div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 2px 4px rgba(37,99,235,0.4));">
-      <div style="background:${color};color:#fff;font-size:11px;font-weight:700;font-family:'Pretendard Variable','맑은 고딕',sans-serif;padding:4px 9px;border-radius:20px;border:2px solid #fff;white-space:nowrap;">${name}</div>
+      <div style="background:${color};color:#fff;font-size:11px;font-weight:700;font-family:'Pretendard Variable','맑은 고딕',sans-serif;padding:4px 9px;border-radius:20px;border:2px solid #fff;white-space:nowrap;">${escapeHtml(shortText(name, 14))}</div>
       <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid ${color};margin-top:-1px;"></div>
     </div>
   `
 }
 
-function drawRouteGuideLine(kakao, map, path, source) {
+function routeStepLabel(step) {
+  if (!step) return '경로'
+  if (step.type === 'walk') {
+    const meters = Number(step.distance)
+    return Number.isFinite(meters) && meters > 0 ? `${distanceLabel(meters)} 걷기` : '걷기'
+  }
+  if (step.type === 'bus') {
+    return step.lines?.map(line => line.busNo).filter(Boolean).slice(0, 2).join(', ') || '버스'
+  }
+  return step.lines?.map(line => line.name).filter(Boolean).slice(0, 2).join(', ') || '지하철'
+}
+
+function stepOverlayHtml(step, index, active) {
+  const style = STEP_STYLE[step?.type] || STEP_STYLE.walk
+  const label = routeStepLabel(step)
+  return `
+    <div style="display:flex;align-items:center;gap:6px;filter:drop-shadow(0 5px 12px rgba(15,23,42,0.24));">
+      <div style="width:28px;height:28px;border-radius:999px;background:${active ? style.color : '#fff'};color:${active ? '#fff' : style.color};border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;font-family:'Pretendard Variable','맑은 고딕',sans-serif;">${index + 1}</div>
+      <div style="background:${active ? style.color : '#fff'};color:${active ? '#fff' : '#0F172A'};border:2px solid ${active ? '#fff' : style.border};border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900;font-family:'Pretendard Variable','맑은 고딕',sans-serif;white-space:nowrap;">
+        ${style.icon} ${escapeHtml(shortText(label, 16))}
+      </div>
+    </div>
+  `
+}
+
+function stationDotHtml(step, name, active) {
+  const style = STEP_STYLE[step?.type] || STEP_STYLE.bus
+  return `
+    <div style="display:flex;align-items:center;gap:5px;filter:drop-shadow(0 2px 5px rgba(15,23,42,0.18));">
+      <span style="width:${active ? 10 : 8}px;height:${active ? 10 : 8}px;border-radius:999px;background:${style.color};border:2px solid #fff;display:block;"></span>
+      ${active && name ? `<span style="background:#fff;color:#334155;border:1px solid #E2E8F0;border-radius:999px;padding:3px 7px;font-size:10px;font-weight:800;font-family:'Pretendard Variable','맑은 고딕',sans-serif;white-space:nowrap;">${escapeHtml(shortText(name, 9))}</span>` : ''}
+    </div>
+  `
+}
+
+function drawRouteGuideLine(kakao, map, path, source, active = false) {
   const styles = {
-    walk: { color: '#2563EB', weight: 4, opacity: 0.72, style: 'shortdash' },
-    bus: { color: '#059669', weight: 5, opacity: 0.72, style: 'solid' },
-    subway: { color: '#7C3AED', weight: 5, opacity: 0.72, style: 'solid' },
+    walk: { color: '#2563EB', weight: 5, opacity: 0.78, style: 'shortdash' },
+    bus: { color: '#059669', weight: 6, opacity: 0.78, style: 'solid' },
+    subway: { color: '#7C3AED', weight: 6, opacity: 0.78, style: 'solid' },
     flow: { color: '#0D9488', weight: 4, opacity: 0.62, style: 'shortdash' },
     guide: { color: '#64748B', weight: 3, opacity: 0.5, style: 'shortdash' },
   }
@@ -53,10 +108,11 @@ function drawRouteGuideLine(kakao, map, path, source) {
   return new kakao.maps.Polyline({
     map,
     path,
-    strokeWeight: style.weight,
+    strokeWeight: active ? style.weight + 2 : style.weight,
     strokeColor: style.color,
-    strokeOpacity: style.opacity,
+    strokeOpacity: active ? 0.96 : style.opacity,
     strokeStyle: style.style,
+    zIndex: active ? 9 : 3,
   })
 }
 
@@ -116,21 +172,25 @@ function createRouteGuideSegments(kakao, basePoints, routeGuide, routeMode) {
     return [{
       source: 'walk',
       path: createDirectGuidePath(kakao, basePoints),
+      step: routeGuide?.steps?.[0] || { type: 'walk', distance: routeGuide?.totalDistance },
+      index: 0,
     }]
   }
 
-  const stepSegments = (routeGuide?.steps || []).flatMap(step => {
+  const stepSegments = (routeGuide?.steps || []).flatMap((step, index) => {
     const points = compactRoutePoints(step.routePoints?.length ? step.routePoints : [step.startPoint, step.endPoint])
     if (points.length < 2) return []
     return [{
       source: step.type === 'bus' ? 'bus' : step.type === 'subway' ? 'subway' : 'walk',
       path: points.map(point => toLatLng(kakao, point)),
+      step,
+      index,
     }]
   })
   if (stepSegments.length) return stepSegments
 
   const { path, source } = createRouteGuidePath(kakao, basePoints, routeGuide)
-  return path.length >= 2 ? [{ path, source }] : []
+  return path.length >= 2 ? [{ path, source, step: null, index: 0 }] : []
 }
 
 function getRouteDistance(points) {
@@ -164,11 +224,50 @@ function isInSeoul(lat, lng) {
     lng <= SEOUL_BOUNDS.maxLng
 }
 
-export default function RouteMap({ destination, searchKeyword, placeCoords, startPlace, viaPlace, routeGuide, routeMode = 'guide', onCoordsReady }) {
+function mapStepItems(routeGuide, routeMode) {
+  const steps = routeGuide?.steps || []
+  if (steps.length) return steps
+  if (routeMode === 'walk') return [{ type: 'walk', distance: routeGuide?.totalDistance }]
+  return []
+}
+
+function pickStationDots(step, active) {
+  const points = (step?.passStopPoints || []).filter(point =>
+    Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))
+  ).map(point => ({
+    lat: Number(point.lat),
+    lng: Number(point.lng),
+    name: point.name || '',
+  })).reduce((acc, point) => {
+    const prev = acc[acc.length - 1]
+    if (!prev || Math.abs(prev.lat - point.lat) > 0.00001 || Math.abs(prev.lng - point.lng) > 0.00001) {
+      acc.push(point)
+    }
+    return acc
+  }, [])
+  if (!points.length) return []
+  const max = active ? 8 : 4
+  const stride = Math.max(1, Math.ceil(points.length / max))
+  return points.filter((_, index) => index % stride === 0).slice(0, max)
+}
+
+export default function RouteMap({
+  destination,
+  searchKeyword,
+  placeCoords,
+  startPlace,
+  viaPlace,
+  routeGuide,
+  routeMode = 'guide',
+  currentStepIndex = 0,
+  onStepSelect,
+  onCoordsReady,
+}) {
   const mapDivRef   = useRef(null)
   const mapRef      = useRef(null)
   const overlayRef  = useRef([])
   const polylineRef = useRef([])
+  const lastStartRef = useRef(null)
   const [status, setStatus]     = useState('loading')
   const [distInfo, setDistInfo] = useState(null)
   const [locationNote, setLocationNote] = useState('')
@@ -247,6 +346,7 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
           setStatus('ready')
 
           function applyStart(start, source) {
+            lastStartRef.current = { ...start, source }
             const startLatLng = new kakao.maps.LatLng(start.lat, start.lng)
             const viaLatLng = viaPlace?.lat && viaPlace?.lng
               ? new kakao.maps.LatLng(viaPlace.lat, viaPlace.lng)
@@ -278,7 +378,30 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
             const segments = createRouteGuideSegments(kakao, basePoints, routeGuide, routeMode)
             segments.forEach(segment => {
               if (segment.path.length >= 2) {
-                polylineRef.current.push(drawRouteGuideLine(kakao, map, segment.path, segment.source))
+                const active = segment.index === currentStepIndex
+                polylineRef.current.push(drawRouteGuideLine(kakao, map, segment.path, segment.source, active))
+
+                const stepOverlay = new kakao.maps.CustomOverlay({
+                  position: segment.path[0],
+                  content: stepOverlayHtml(segment.step, segment.index, active),
+                  yAnchor: 1.45,
+                  zIndex: active ? 30 : 20,
+                })
+                stepOverlay.setMap(map)
+                overlayRef.current.push(stepOverlay)
+
+                if (segment.step?.type !== 'walk') {
+                  pickStationDots(segment.step, active).forEach(point => {
+                    const stationOverlay = new kakao.maps.CustomOverlay({
+                      position: new kakao.maps.LatLng(point.lat, point.lng),
+                      content: stationDotHtml(segment.step, point.name, active),
+                      yAnchor: 0.5,
+                      zIndex: active ? 18 : 12,
+                    })
+                    stationOverlay.setMap(map)
+                    overlayRef.current.push(stationOverlay)
+                  })
+                }
               }
             })
 
@@ -294,9 +417,9 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
 
             setDistInfo({ dist, duration })
             setLocationNote(routeMode === 'walk'
-              ? '가까운 거리는 도보 중심으로 안내해요. 파란 점선은 도보 방향 참고선이고, 아래 단계별 안내를 함께 확인하세요.'
+              ? '가까운 거리는 도보 중심으로 안내해요. 파란 점선과 단계 번호를 보며 아래 안내를 함께 확인하세요.'
               : routeGuide?.steps?.length
-                ? '공공데이터로 확인한 조건을 함께 반영해 도보·버스·지하철 구간별로 표시해요. 자세한 순서는 아래 단계별 안내를 따르세요.'
+                ? '공공데이터와 ODsay 경로의 정류장·역 좌표를 구간별로 표시해요. 번호와 아래 전체 경로를 함께 따라가세요.'
                 : '지도 선은 직선 기준 참고선이에요. 정확한 순서는 위 전체 경로를 따르세요.'
             )
             onCoordsReady?.({
@@ -312,6 +435,11 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
 
           if (startPlace?.lat && startPlace?.lng) {
             applyStart(startPlace, 'manual')
+            return
+          }
+
+          if (lastStartRef.current?.lat && lastStartRef.current?.lng && lastStartRef.current.source !== 'manual') {
+            applyStart(lastStartRef.current, lastStartRef.current.source || 'gps')
             return
           }
 
@@ -362,12 +490,13 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
       polylineRef.current.forEach(line => { try { line.setMap(null) } catch {} })
       polylineRef.current = []
     }
-  }, [destination, searchKeyword, placeCoords, startPlace, viaPlace, routeGuide, routeMode])
+  }, [destination, searchKeyword, placeCoords, startPlace, viaPlace, routeGuide, routeMode, currentStepIndex])
 
   const routeDistance = Number(routeGuide?.totalDistance) > 0 ? Number(routeGuide.totalDistance) : distInfo?.dist
   const routeDuration = Number(routeGuide?.totalTime) > 0 ? Number(routeGuide.totalTime) : distInfo?.duration
   const hasRouteMetrics = Number(routeGuide?.totalDistance) > 0 || Number(routeGuide?.totalTime) > 0
   const routeDistanceText = distanceLabel(routeDistance)
+  const stepsForMap = mapStepItems(routeGuide, routeMode)
 
   return (
     <div style={{
@@ -422,7 +551,7 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
       </div>
 
       <div style={{ position: 'relative' }}>
-        <div ref={mapDivRef} style={{ height: 220 }} />
+        <div ref={mapDivRef} style={{ height: 270 }} />
 
         {status === 'loading' && (
           <div style={{
@@ -467,6 +596,52 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
           </div>
         )}
       </div>
+
+      {stepsForMap.length > 0 && (
+        <div style={{ padding: '11px 14px 10px', borderTop: '1px solid #F1F5F9', background: '#FBFDFF' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <p style={{ fontSize: 12, fontWeight: 950, color: '#0F172A', margin: 0 }}>지도에서 보는 순서</p>
+            <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 800, color: '#64748B' }}>
+              {Math.min(currentStepIndex + 1, stepsForMap.length)} / {stepsForMap.length}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 2 }}>
+            {stepsForMap.map((step, index) => {
+              const style = STEP_STYLE[step.type] || STEP_STYLE.walk
+              const active = index === currentStepIndex
+              return (
+                <button
+                  key={`${step.type}-${index}`}
+                  type="button"
+                  onClick={() => onStepSelect?.(index)}
+                  style={{
+                    flex: '0 0 auto',
+                    minHeight: 42,
+                    borderRadius: 999,
+                    border: `1.5px solid ${active ? style.color : style.border}`,
+                    background: active ? style.color : '#fff',
+                    color: active ? '#fff' : '#0F172A',
+                    padding: '0 12px 0 9px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    fontSize: 12,
+                    fontWeight: 950,
+                    cursor: onStepSelect ? 'pointer' : 'default',
+                    fontFamily: 'inherit',
+                    boxShadow: active ? '0 7px 16px rgba(15,23,42,0.16)' : 'none',
+                  }}
+                >
+                  <span style={{ width: 22, height: 22, borderRadius: '50%', background: active ? 'rgba(255,255,255,0.18)' : style.bg, color: active ? '#fff' : style.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>
+                    {index + 1}
+                  </span>
+                  <span>{style.icon} {routeStepLabel(step)}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div style={{ padding: '8px 14px', borderTop: '1px solid #F8FAFC' }}>
         {(routeMode === 'walk' || routeGuide?.steps?.length) && (
