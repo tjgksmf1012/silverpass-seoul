@@ -407,12 +407,16 @@ function stepMetaLabel(step) {
   return parts.filter(Boolean).join(' · ')
 }
 
-function stepEndpointText(step) {
+function stepEndpointText(step, previousStep, nextStep, destinationName) {
   if (!step) return ''
   if (step.detail) return step.detail
-  const start = step.startStationName || step.startName || (step.type === 'walk' ? '출발지' : '타는 곳')
-  const end = step.endName || (step.type === 'walk' ? '다음 지점' : '내릴 곳')
-  if (step.type === 'walk') return `${start}에서 ${end}까지 걸어요.`
+  if (step.type === 'walk') {
+    const start = step.startName || previousStep?.endStationName || previousStep?.endName || '출발지'
+    const end = step.endName || (nextStep ? '다음 지점' : destinationName || '목적지')
+    return `${start}에서 ${end}까지 걸어요.`
+  }
+  const start = step.startStationName || step.startName || '타는 곳'
+  const end = step.endName || '내릴 곳'
   if (step.type === 'bus') return `${start}에서 ${busDirectionText(step)}을 확인하고 타서 ${end}에서 내리세요.`
   return `${start}에서 ${normalizeDirectionText(step.way) ? `${normalizeDirectionText(step.way)}으로 ` : ''}타고 ${end}에서 내리세요.`
 }
@@ -466,24 +470,25 @@ function stepInstructionItems(step, direction, nextStep) {
   const start = step.startStationName || step.startName || '출발지'
   const end = step.endName || '도착 지점'
   if (step.type === 'walk') {
+    const isFinalWalk = !nextStep
     const detailed = walkInstructionItems(step, 4)
     if (detailed.length >= 2) {
       return [
         ...detailed,
-        '파란 선 위 번호 표식을 순서대로 따라가세요',
+        isFinalWalk ? '도착 표식을 확인하면 안내가 끝나요' : '파란 선 위 번호 표식을 순서대로 따라가세요',
       ].slice(0, 5)
     }
     const nextMarker =
       nextStep?.type === 'bus' ? '버스 타는 곳' :
       nextStep?.type === 'subway' ? '지하철 타는 곳' :
-      '다음 표식'
+      '도착 표식'
     const routeLead = step.routeSource === 'walking-route'
       ? '지도 위 파란 보행 경로를 따라 '
       : (direction ? `${direction.label} 방향으로 ` : '지도 위 파란 선 방향으로 ')
     return [
       `${routeLead}${walkDistanceText(step)} 이동`,
       '횡단보도와 보행로를 우선해서 천천히 이동',
-      `지도에서 ${nextMarker}을 찾으면 다음 안내 확인`,
+      `지도에서 ${nextMarker}을 찾으면 ${isFinalWalk ? '도착 확인' : '다음 안내 확인'}`,
     ]
   }
   if (step.type === 'bus') {
@@ -1065,7 +1070,7 @@ export default function RouteMap({
                 {stepActionTitle(activeMapStep)}
               </p>
               <p style={{ fontSize: 13, fontWeight: 800, color: '#475569', margin: 0, lineHeight: 1.45 }}>
-                {stepEndpointText(activeMapStep)}
+                {stepEndpointText(activeMapStep, previousMapStep, nextMapStep, destination)}
               </p>
               {activeStopPreview && (
                 <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748B', fontWeight: 800, lineHeight: 1.45 }}>
