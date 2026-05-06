@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import BottomNav from '../components/BottomNav.jsx'
 import { ArrowLeft, UserIcon, PhoneIcon, WalkIcon, SettingsIcon,
          MapPin, CheckCircle, BuildingIcon, SeniorIcon, UsersIcon } from '../components/Icons.jsx'
-import { createDefaultProfile, getProfile, saveProfile, markVisited } from '../services/storage.js'
+import { createDefaultProfile, createFavoritePlace, getProfile, normalizeFavorites, saveProfile, markVisited } from '../services/storage.js'
 import { getKakaoUser } from '../services/kakaoAuth.js'
-import { getCurrentUser, signOut, getLinkedGuardian, syncElderProfileFromSupabase, syncGuardianProfileFromSupabase } from '../services/auth.js'
+import { getCurrentUser, signOut, getLinkedGuardian, syncElderProfileFromSupabase, syncGuardianProfileFromSupabase, updateElderInfo } from '../services/auth.js'
 
 const WALK_OPTIONS = [10, 15, 20, 30]
+const ICON_OPTIONS = ['📍', '🏠', '👨‍👩‍👧', '🏥', '💊', '🏛️', '🛒', '☕', '🌳', '🚉']
 
 export default function Profile() {
   const navigate = useNavigate()
@@ -52,28 +53,67 @@ export default function Profile() {
   }, [isRouteUser, currentUser?.id])
 
   function update(key, val)  { setProfile(p => ({ ...p, [key]: val })); setSaved(false) }
-  const quickStartPlaces = [
-    profile.homeAddress && { id: 'home', name: '집', icon: '🏠', address: profile.homeAddress, helper: '내 집 주소' },
-    ...(profile.favorites || [])
-      .filter(fav => fav.address && fav.showOnHome !== false)
-      .map(fav => ({
-        id: fav.id,
-        name: fav.name,
-        icon: fav.icon || '📍',
-        address: fav.address,
-        helper: '보호자 등록',
-      })),
-  ].filter(Boolean).reduce((acc, place) => {
-    if (acc.some(item => item.address === place.address)) return acc
-    return [...acc, place]
-  }, [])
+  const savedFavoritePlaces = (profile.favorites || []).filter(fav => fav.address)
 
-  function handleSave() {
+  function updateFavorite(id, patch) {
+    setProfile(p => ({
+      ...p,
+      favorites: normalizeFavorites((p.favorites || []).map(fav => fav.id === id ? { ...fav, ...patch } : fav)),
+    }))
+    setSaved(false)
+  }
+
+  function addFavorite() {
+    setProfile(p => ({
+      ...p,
+      favorites: normalizeFavorites([
+        ...(p.favorites || []),
+        createFavoritePlace({ name: '새 장소', icon: '📍', showOnHome: true }),
+      ]),
+    }))
+    setSaved(false)
+  }
+
+  function removeFavorite(id) {
+    setProfile(p => ({
+      ...p,
+      favorites: normalizeFavorites((p.favorites || []).filter(fav => fav.id !== id)),
+    }))
+    setSaved(false)
+  }
+
+  function searchFavoriteAddress(id) {
+    if (!window.daum?.Postcode) return
+    new window.daum.Postcode({
+      oncomplete(data) {
+        updateFavorite(id, { address: data.roadAddress || data.jibunAddress })
+      },
+    }).open()
+  }
+
+  async function handleSave() {
     const nextProfile = currentUser?.id
       ? { ...profile, ownerId: currentUser.id, profileRole: currentUser.role || 'user' }
       : profile
     saveProfile(nextProfile)
     setProfile(nextProfile)
+    if (isRouteUser && currentUser?.provider !== 'guest' && currentUser?.id) {
+      await updateElderInfo(currentUser.id, {
+        homeAddress: nextProfile.homeAddress,
+        frequentPlaces: JSON.stringify(normalizeFavorites(nextProfile.favorites)),
+        notes: nextProfile.healthNotes,
+        phone: nextProfile.guardianPhone,
+        district: nextProfile.district,
+        maxWalkMin: nextProfile.maxWalkMin,
+        allowStairs: nextProfile.allowStairs,
+        mobilityAid: nextProfile.mobilityAid,
+        preferLowFloorBus: nextProfile.preferLowFloorBus,
+        preferElevator: nextProfile.preferElevator,
+        avoidTransfers: nextProfile.avoidTransfers,
+        needRestStops: nextProfile.needRestStops,
+        slowPace: nextProfile.slowPace,
+      })
+    }
     markVisited()
     setSaved(true)
     setTimeout(() => navigate('/'), 800)
@@ -262,51 +302,133 @@ export default function Profile() {
           </div>
         </Card>
 
-        {/* 바로 출발 목적지 */}
-        <Card icon={<MapPin size={15} color="#0D9488" />} title="바로 출발 목적지">
+        {/* 자주 가는 곳 */}
+        <Card icon={<MapPin size={15} color="#0D9488" />} title="자주 가는 곳">
           <p style={{ color: '#64748B', fontSize: 14, fontWeight: 700, lineHeight: 1.5, margin: '0 0 12px' }}>
-            보호자가 등록한 장소는 홈 화면의 큰 바로 출발 카드로 보여요.
+            어르신이나 보호자가 등록한 장소는 홈 화면의 큰 버튼으로 보여요.
           </p>
-          {quickStartPlaces.length ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {quickStartPlaces.map(place => (
-                <div key={place.id} style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  border: '1.5px solid #CCFBF1',
-                  borderRadius: 16,
-                  background: '#F8FAFC',
-                  padding: '12px 13px',
-                }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 14, background: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
-                    {place.icon}
-                  </div>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <p style={{ fontWeight: 900, fontSize: 16, color: '#0F172A', margin: 0 }}>{place.name}</p>
-                    <p style={{ color: '#0F766E', fontSize: 12, fontWeight: 900, margin: '3px 0 0' }}>{place.helper}</p>
-                    <p style={{
-                      color: '#64748B',
-                      fontSize: 13,
-                      fontWeight: 700,
-                      lineHeight: 1.35,
-                      margin: '4px 0 0',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}>
-                      {place.address}
-                    </p>
-                  </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {normalizeFavorites(profile.favorites).map(fav => (
+              <div key={fav.id} style={{
+                border: '1.5px solid #E2E8F0',
+                borderRadius: 16,
+                background: '#F8FAFC',
+                padding: 12,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <select
+                    value={fav.icon || '📍'}
+                    onChange={e => updateFavorite(fav.id, { icon: e.target.value })}
+                    aria-label={`${fav.name} 아이콘`}
+                    style={{
+                      width: 48,
+                      height: 46,
+                      borderRadius: 12,
+                      border: '1.5px solid #CBD5E1',
+                      background: '#FFFFFF',
+                      fontSize: 19,
+                      textAlign: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {ICON_OPTIONS.map(icon => <option key={icon} value={icon}>{icon}</option>)}
+                  </select>
+                  <input
+                    type="text"
+                    value={fav.name}
+                    onChange={e => updateFavorite(fav.id, { name: e.target.value })}
+                    placeholder="장소 이름"
+                    style={{ ...inputSt, flex: 1, minWidth: 0, minHeight: 46, padding: '10px 12px', fontSize: 15, background: '#FFFFFF' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => updateFavorite(fav.id, { showOnHome: !fav.showOnHome })}
+                    style={{
+                      flexShrink: 0,
+                      border: fav.showOnHome ? 'none' : '1.5px solid #E2E8F0',
+                      borderRadius: 12,
+                      background: fav.showOnHome ? '#0D9488' : '#FFFFFF',
+                      color: fav.showOnHome ? '#FFFFFF' : '#64748B',
+                      fontSize: 12,
+                      fontWeight: 900,
+                      padding: '10px 9px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {fav.showOnHome ? '홈에 보임' : '숨김'}
+                  </button>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ border: '1.5px dashed #CBD5E1', borderRadius: 16, background: '#F8FAFC', padding: '16px 14px', textAlign: 'center' }}>
-              <p style={{ color: '#64748B', fontSize: 14, fontWeight: 800, lineHeight: 1.5, margin: 0 }}>
-                보호자 화면에서 목적지를 등록하면 여기에 표시돼요.
-              </p>
-            </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="text"
+                    value={fav.address}
+                    onChange={e => updateFavorite(fav.id, { address: e.target.value })}
+                    placeholder="주소를 입력하거나 검색"
+                    style={{ ...inputSt, flex: 1, minWidth: 0, minHeight: 46, padding: '10px 12px', fontSize: 14, background: '#FFFFFF' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => searchFavoriteAddress(fav.id)}
+                    style={{
+                      border: '1.5px solid #BFEFE6',
+                      borderRadius: 12,
+                      background: '#F0FDFA',
+                      color: '#0F766E',
+                      fontSize: 13,
+                      fontWeight: 900,
+                      padding: '0 12px',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    검색
+                  </button>
+                  {fav.custom && (
+                    <button
+                      type="button"
+                      onClick={() => removeFavorite(fav.id)}
+                      style={{
+                        border: '1.5px solid #FEE2E2',
+                        borderRadius: 12,
+                        background: '#FFFFFF',
+                        color: '#DC2626',
+                        fontSize: 13,
+                        fontWeight: 900,
+                        padding: '0 10px',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                      }}
+                    >
+                      삭제
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={addFavorite}
+            style={{
+              marginTop: 12,
+              width: '100%',
+              border: '1.5px dashed #5EEAD4',
+              borderRadius: 16,
+              background: '#F0FDFA',
+              color: '#0F766E',
+              fontSize: 16,
+              fontWeight: 900,
+              minHeight: 54,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            + 자주 가는 곳 추가
+          </button>
+          {!savedFavoritePlaces.length && (
+            <p style={{ color: '#94A3B8', fontSize: 12, fontWeight: 700, lineHeight: 1.5, margin: '10px 0 0' }}>
+              주소를 넣고 저장하면 홈 화면의 자주 가는 곳에 바로 떠요.
+            </p>
           )}
         </Card>
 

@@ -358,10 +358,10 @@ export default function Home() {
           </button>
         )}
 
-        {/* 보호자 등록 빠른 목적지 */}
+        {/* 자주 가는 곳 */}
         {(() => {
           const favDests = registeredFavorites
-            .map(f => ({ label: f.name, icon: f.icon || '📍', dest: f.address, helper: '등록 목적지' }))
+            .map(f => ({ label: f.name, icon: f.icon || '📍', dest: f.address, helper: '자주 가는 곳' }))
           const homeDest = profile.homeAddress
             ? [{ label: '집으로', icon: '🏠', dest: profile.homeAddress, helper: '우리 집' }]
             : []
@@ -372,7 +372,6 @@ export default function Home() {
             seen.add(key)
             return true
           })
-          if (!allDests.length) return null
           return (
             <section style={{
               background: 'linear-gradient(180deg, #FFFFFF 0%, #F0FDFA 100%)',
@@ -383,8 +382,10 @@ export default function Home() {
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
                 <div>
-                  <p className="senior-section-title" style={{ fontSize: 21, color: '#0F172A', margin: 0 }}>바로 출발</p>
-                  <p style={{ color: '#0F766E', fontSize: 14, fontWeight: 800, margin: '5px 0 0' }}>등록된 목적지</p>
+                  <p className="senior-section-title" style={{ fontSize: 21, color: '#0F172A', margin: 0 }}>자주 가는 곳</p>
+                  <p style={{ color: '#0F766E', fontSize: 14, fontWeight: 800, margin: '5px 0 0' }}>
+                    보호자나 어르신이 등록한 목적지
+                  </p>
                 </div>
                 <span style={{
                   flexShrink: 0,
@@ -399,74 +400,104 @@ export default function Home() {
                   {allDests.length}곳
                 </span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(174px, 1fr))', gap: 12 }}>
-                {allDests.map((d, i) => (
-                  <button
-                    key={i}
-                    onClick={() => goRoute(d.dest)}
-                    style={{
-                      minHeight: 112,
-                      background: '#FFFFFF',
-                      border: '1.5px solid #BFEFE6',
-                      borderRadius: 22,
-                      padding: '14px 13px',
-                      color: '#0F172A',
-                      cursor: 'pointer',
-                      boxShadow: '0 6px 18px rgba(15,23,42,0.08)',
-                      transition: 'transform 0.12s, box-shadow 0.12s',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      textAlign: 'left',
-                    }}
-                    onTouchStart={e => { e.currentTarget.style.transform = 'scale(0.95)' }}
-                    onTouchEnd={e   => { e.currentTarget.style.transform = 'scale(1)' }}
-                    onMouseDown={e  => { e.currentTarget.style.transform = 'scale(0.95)' }}
-                    onMouseUp={e    => { e.currentTarget.style.transform = 'scale(1)' }}
-                  >
-                    <span style={{
-                      width: 54,
-                      height: 54,
-                      borderRadius: 18,
-                      background: '#ECFDF5',
-                      border: '1px solid #CCFBF1',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 27,
-                      flexShrink: 0,
-                    }}>
-                      {d.icon}
-                    </span>
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: 'block', color: '#0F172A', fontSize: 19, fontWeight: 950, lineHeight: 1.2 }}>
-                        {d.label}
-                      </span>
-                      <span style={{ display: 'block', color: '#0F766E', fontSize: 13, fontWeight: 900, marginTop: 4 }}>
-                        {d.helper}
-                      </span>
+              {allDests.length ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(174px, 1fr))', gap: 12 }}>
+                  {allDests.map((d, i) => (
+                    <button
+                      key={i}
+                      onClick={() => goRoute(d.dest)}
+                      style={{
+                        minHeight: 112,
+                        background: '#FFFFFF',
+                        border: '1.5px solid #BFEFE6',
+                        borderRadius: 22,
+                        padding: '14px 13px',
+                        color: '#0F172A',
+                        cursor: 'pointer',
+                        boxShadow: '0 6px 18px rgba(15,23,42,0.08)',
+                        transition: 'transform 0.12s, box-shadow 0.12s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        textAlign: 'left',
+                      }}
+                      onTouchStart={e => { e.currentTarget.style.transform = 'scale(0.95)' }}
+                      onTouchEnd={e   => { e.currentTarget.style.transform = 'scale(1)' }}
+                      onMouseDown={e  => { e.currentTarget.style.transform = 'scale(0.95)' }}
+                      onMouseUp={e    => { e.currentTarget.style.transform = 'scale(1)' }}
+                    >
                       <span style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                        color: '#64748B',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        lineHeight: 1.35,
-                        marginTop: 5,
+                        width: 54,
+                        height: 54,
+                        borderRadius: 18,
+                        background: '#ECFDF5',
+                        border: '1px solid #CCFBF1',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 27,
+                        flexShrink: 0,
                       }}>
-                        {d.dest}
+                        {d.icon}
                       </span>
-                    </span>
-                    <ChevronRight size={21} color="#0D9488" />
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: 'block', color: '#0F172A', fontSize: 19, fontWeight: 950, lineHeight: 1.2 }}>
+                          {d.label}
+                        </span>
+                        <span style={{ display: 'block', color: '#0F766E', fontSize: 13, fontWeight: 900, marginTop: 4 }}>
+                          {d.helper}
+                        </span>
+                        <span style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                          color: '#64748B',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          lineHeight: 1.35,
+                          marginTop: 5,
+                        }}>
+                          {d.dest}
+                        </span>
+                      </span>
+                      <ChevronRight size={21} color="#0D9488" />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div style={{
+                  border: '1.5px dashed #99F6E4',
+                  borderRadius: 20,
+                  background: '#FFFFFF',
+                  padding: '18px 14px',
+                  textAlign: 'center',
+                }}>
+                  <p style={{ color: '#0F172A', fontSize: 17, fontWeight: 900, margin: '0 0 6px' }}>
+                    아직 등록된 곳이 없어요
+                  </p>
+                  <p style={{ color: '#64748B', fontSize: 14, fontWeight: 700, lineHeight: 1.5, margin: '0 0 14px' }}>
+                    보호자가 등록하거나, 어르신이 직접 자주 가는 주소를 추가할 수 있어요.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/profile')}
+                    style={{
+                      border: 'none',
+                      borderRadius: 15,
+                      background: 'linear-gradient(135deg, #0F766E, #0D9488)',
+                      color: '#FFFFFF',
+                      fontSize: 16,
+                      fontWeight: 900,
+                      minHeight: 52,
+                      padding: '0 18px',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    자주 가는 곳 추가하기
                   </button>
-                ))}
-              </div>
-              {!registeredFavorites.length && profile.homeAddress && (
-                <p style={{ color: '#64748B', fontSize: 13, fontWeight: 700, margin: '12px 2px 0' }}>
-                  보호자가 목적지를 등록하면 여기에 함께 보여요
-                </p>
+                </div>
               )}
             </section>
           )
