@@ -234,19 +234,18 @@ export default function Profile() {
 
         {/* 이동 조건 */}
         <Card icon={<SettingsIcon size={15} color="#0D9488" />} title="이동 조건">
-          <Toggle label="계단 없는 길 우선" desc="계단보다 엘리베이터·완만한 길을 먼저 안내" value={!profile.allowStairs} onChange={v => update('allowStairs', !v)} />
-          <div style={{ height: 1, background: '#F1F5F9', margin: '12px 0' }} />
-          <Toggle label="보행보조기구 사용" desc="휠체어, 워커, 지팡이 등" value={profile.mobilityAid} onChange={v => update('mobilityAid', v)} />
-          <div style={{ height: 1, background: '#F1F5F9', margin: '12px 0' }} />
-          <Toggle label="저상버스 우선" desc="버스 경로는 저상버스 가능성을 더 우선" value={profile.preferLowFloorBus} onChange={v => update('preferLowFloorBus', v)} />
-          <div style={{ height: 1, background: '#F1F5F9', margin: '12px 0' }} />
-          <Toggle label="승강기 있는 경로 우선" desc="지하철 출구와 환승은 승강기 접근을 우선" value={profile.preferElevator} onChange={v => update('preferElevator', v)} />
-          <div style={{ height: 1, background: '#F1F5F9', margin: '12px 0' }} />
-          <Toggle label="환승 적은 길 우선" desc="조금 돌아가도 갈아타는 횟수를 줄이기" value={profile.avoidTransfers} onChange={v => update('avoidTransfers', v)} />
-          <div style={{ height: 1, background: '#F1F5F9', margin: '12px 0' }} />
-          <Toggle label="중간에 쉴 곳 필요" desc="쉼터·약국 같은 안전 지점을 더 중요하게 보기" value={profile.needRestStops} onChange={v => update('needRestStops', v)} />
-          <div style={{ height: 1, background: '#F1F5F9', margin: '12px 0' }} />
-          <Toggle label="천천히 걷기" desc="예상 시간을 여유 있게 잡고 도보 부담을 낮추기" value={profile.slowPace} onChange={v => update('slowPace', v)} />
+          <p style={{ color: '#64748B', fontSize: 14, fontWeight: 700, lineHeight: 1.45, margin: '0 0 12px' }}>
+            선택한 조건은 길찾기 추천 순서에 반영돼요.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <Toggle label="계단 없는 길 우선" desc="계단보다 엘리베이터·완만한 길을 먼저 안내" value={!profile.allowStairs} onChange={v => update('allowStairs', !v)} />
+            <Toggle label="보행보조기구 사용" desc="휠체어, 워커, 지팡이 등" value={profile.mobilityAid} onChange={v => update('mobilityAid', v)} />
+            <Toggle label="저상버스 우선" desc="버스 경로는 저상버스 가능성을 더 우선" value={profile.preferLowFloorBus} onChange={v => update('preferLowFloorBus', v)} />
+            <Toggle label="승강기 있는 경로 우선" desc="지하철 출구와 환승은 승강기 접근을 우선" value={profile.preferElevator} onChange={v => update('preferElevator', v)} />
+            <Toggle label="환승 적은 길 우선" desc="조금 돌아가도 갈아타는 횟수를 줄이기" value={profile.avoidTransfers} onChange={v => update('avoidTransfers', v)} />
+            <Toggle label="중간에 쉴 곳 필요" desc="쉼터·약국 같은 안전 지점을 더 중요하게 보기" value={profile.needRestStops} onChange={v => update('needRestStops', v)} />
+            <Toggle label="천천히 걷기" desc="예상 시간을 여유 있게 잡고 도보 부담을 낮추기" value={profile.slowPace} onChange={v => update('slowPace', v)} />
+          </div>
         </Card>
 
         {/* 바로 출발 목적지 */}
@@ -366,23 +365,60 @@ function Card({ icon, title, children }) {
 }
 
 function Toggle({ label, desc, value, onChange }) {
+  const active = Boolean(value)
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-      <div>
-        <p style={{ fontWeight: 900, fontSize: 17, color: '#0F172A', margin: 0 }}>{label}</p>
-        <p style={{ color: '#64748B', fontSize: 14, margin: '4px 0 0', fontWeight: 600 }}>{desc}</p>
-      </div>
-      <button onClick={() => onChange(!value)} role="switch" aria-checked={value} style={{
-        width: 58, height: 34, borderRadius: 99, border: 'none', cursor: 'pointer', flexShrink: 0,
-        background: value ? 'linear-gradient(135deg, #0F766E, #0D9488)' : '#E2E8F0',
-        position: 'relative', transition: 'background 0.2s',
+    <button
+      type="button"
+      onClick={() => onChange(!active)}
+      role="switch"
+      aria-checked={active}
+      style={{
+        width: '100%',
+        minHeight: 82,
+        border: active ? '1.5px solid #5EEAD4' : '1.5px solid #E2E8F0',
+        borderRadius: 18,
+        background: active ? '#F0FDFA' : '#FFFFFF',
+        boxShadow: active ? '0 6px 16px rgba(13,148,136,0.12)' : '0 1px 2px rgba(15,23,42,0.04)',
+        cursor: 'pointer',
+        padding: '13px 13px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        textAlign: 'left',
+        fontFamily: 'inherit',
+      }}
+    >
+      <span style={{
+        width: 34,
+        height: 34,
+        borderRadius: 12,
+        background: active ? 'linear-gradient(135deg, #0F766E, #0D9488)' : '#F1F5F9',
+        border: active ? 'none' : '1.5px solid #CBD5E1',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#FFFFFF',
+        fontWeight: 950,
+        fontSize: 18,
+        flexShrink: 0,
       }}>
-        <span style={{
-          position: 'absolute', top: 4, width: 26, height: 26, borderRadius: '50%',
-          background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
-          transition: 'left 0.2s', left: value ? 28 : 4,
-        }} />
-      </button>
-    </div>
+        {active ? '✓' : ''}
+      </span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: 'block', fontWeight: 950, fontSize: 16, color: '#0F172A', lineHeight: 1.25 }}>{label}</span>
+        <span style={{ display: 'block', color: '#64748B', fontSize: 13, marginTop: 4, fontWeight: 700, lineHeight: 1.35 }}>{desc}</span>
+      </span>
+      <span style={{
+        flexShrink: 0,
+        borderRadius: 999,
+        padding: '6px 9px',
+        background: active ? '#CCFBF1' : '#F1F5F9',
+        color: active ? '#0F766E' : '#64748B',
+        fontSize: 12,
+        fontWeight: 950,
+      }}>
+        {active ? '켜짐' : '꺼짐'}
+      </span>
+    </button>
   )
 }
