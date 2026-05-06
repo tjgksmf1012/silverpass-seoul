@@ -28,6 +28,39 @@ function asArray(value) {
   return Array.isArray(value) ? value : [value]
 }
 
+function numberOrNull(value) {
+  const num = Number(value)
+  return Number.isFinite(num) ? num : null
+}
+
+function pointFromLngLat(lng, lat) {
+  const x = numberOrNull(lng)
+  const y = numberOrNull(lat)
+  if (x === null || y === null) return null
+  return { lat: y, lng: x }
+}
+
+function subPathPoint(s, prefix) {
+  return pointFromLngLat(s?.[`${prefix}X`], s?.[`${prefix}Y`])
+}
+
+function stationPoint(station) {
+  return pointFromLngLat(
+    station?.x ?? station?.stationX ?? station?.lon ?? station?.lng ?? station?.longitude,
+    station?.y ?? station?.stationY ?? station?.lat ?? station?.latitude,
+  )
+}
+
+function compactPoints(points) {
+  return points.filter(Boolean).reduce((acc, point) => {
+    const prev = acc[acc.length - 1]
+    if (!prev || Math.abs(prev.lat - point.lat) > 0.00001 || Math.abs(prev.lng - point.lng) > 0.00001) {
+      acc.push(point)
+    }
+    return acc
+  }, [])
+}
+
 // ─── 경로 탐색 ────────────────────────────────────────────────────────────────
 /**
  * @param {number} sx 출발지 경도 (lng)
@@ -66,12 +99,17 @@ function parsePath(path) {
     .map((s, index) => {
       if (s.trafficType === 3) {
         const distance = s.distance || 0
+        const startPoint = subPathPoint(s, 'start')
+        const endPoint = subPathPoint(s, 'end')
         return {
           type: 'walk',
           distance,
           sectionTime: s.sectionTime || Math.max(1, Math.ceil(distance / 65)),
           startName: s.startName || '',
           endName: s.endName || '',
+          startPoint,
+          endPoint,
+          routePoints: compactPoints([startPoint, endPoint]),
           index,
         }
       }
@@ -80,6 +118,8 @@ function parsePath(path) {
         // 버스
         const lanes = asArray(s.lane)
         const stations = asArray(s.passStopList?.stations)
+        const startPoint = subPathPoint(s, 'start')
+        const endPoint = subPathPoint(s, 'end')
         return {
           type: 'bus',
           lines: lanes.map(l => ({
@@ -94,11 +134,17 @@ function parsePath(path) {
           sectionTime: s.sectionTime || 0,
           startStationId: stations[0]?.stationID || null,
           startStationName: stations[0]?.stationName || s.startName || '',
+          startPoint,
+          endPoint,
+          routePoints: compactPoints([startPoint, ...stations.map(stationPoint), endPoint]),
           index,
         }
       } else {
         // 지하철
         const lanes = asArray(s.lane)
+        const stations = asArray(s.passStopList?.stations)
+        const startPoint = subPathPoint(s, 'start')
+        const endPoint = subPathPoint(s, 'end')
         return {
           type: 'subway',
           lines: lanes.map(l => ({
@@ -112,6 +158,9 @@ function parsePath(path) {
           sectionTime: s.sectionTime || 0,
           way: s.way || '',
           wayCode: s.wayCode,
+          startPoint,
+          endPoint,
+          routePoints: compactPoints([startPoint, ...stations.map(stationPoint), endPoint]),
           index,
         }
       }
@@ -122,6 +171,7 @@ function parsePath(path) {
   const walkSteps = steps
     .filter(s => s.type === 'walk')
     .reduce((acc, s) => acc + (s.distance || 0), 0)
+  const routePoints = compactPoints(steps.flatMap(step => step.routePoints || []))
 
   return {
     pathType: path.pathType,
@@ -133,6 +183,7 @@ function parsePath(path) {
     busTransitCount: info.busTransitCount || 0,
     subwayTransitCount: info.subwayTransitCount || 0,
     steps,
+    routePoints,
     // 첫 번째 탑승 정류장 (버스 실시간 조회에 사용)
     firstBusStep: steps.find(s => s.type === 'bus') || null,
   }

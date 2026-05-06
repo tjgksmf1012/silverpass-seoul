@@ -40,6 +40,19 @@ function coordKey(coords) {
   return `${coords?.user?.lat},${coords?.user?.lng}:${via}:${coords?.dest?.lat},${coords?.dest?.lng}`
 }
 
+function compactRoutePoints(points) {
+  return points.filter(point =>
+    Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))
+  ).reduce((acc, point) => {
+    const normalized = { lat: Number(point.lat), lng: Number(point.lng) }
+    const prev = acc[acc.length - 1]
+    if (!prev || Math.abs(prev.lat - normalized.lat) > 0.00001 || Math.abs(prev.lng - normalized.lng) > 0.00001) {
+      acc.push(normalized)
+    }
+    return acc
+  }, [])
+}
+
 function combineViaRoutes(firstLeg, secondLeg, via) {
   const viaStep = {
     type: 'walk',
@@ -59,8 +72,38 @@ function combineViaRoutes(firstLeg, secondLeg, via) {
     busTransitCount: (firstLeg.busTransitCount || 0) + (secondLeg.busTransitCount || 0),
     subwayTransitCount: (firstLeg.subwayTransitCount || 0) + (secondLeg.subwayTransitCount || 0),
     steps,
+    routePoints: compactRoutePoints([
+      ...(firstLeg.routePoints || []),
+      ...(via?.lat && via?.lng ? [{ lat: via.lat, lng: via.lng }] : []),
+      ...(secondLeg.routePoints || []),
+    ]),
     firstBusStep: steps.find(s => s.type === 'bus') || null,
   }
+}
+
+function routeDistanceLabel(meters) {
+  if (meters == null) return '-'
+  return meters >= 1000 ? `${(meters / 1000).toFixed(1)}km` : `${meters}m`
+}
+
+function getRouteCriteria(route, index, routes = []) {
+  const candidates = routes.filter(Boolean)
+  if (!route || !candidates.length) {
+    return { label: '추천 경로', short: '추천', desc: '시간과 이동 부담을 함께 본 경로', color: '#0D9488' }
+  }
+
+  const minTime = Math.min(...candidates.map(r => r.totalTime || Infinity))
+  const minWalk = Math.min(...candidates.map(r => r.totalWalk ?? Infinity))
+  const minFare = Math.min(...candidates.map(r => r.totalFare || Infinity))
+  const transferCount = route.busTransitCount + route.subwayTransitCount
+  const minTransfers = Math.min(...candidates.map(r => (r.busTransitCount || 0) + (r.subwayTransitCount || 0)))
+
+  if (index === 0) return { label: '추천 경로', short: '추천', desc: '시간·도보·환승을 종합한 기본 추천', color: '#0D9488' }
+  if (route.totalTime === minTime) return { label: '최단 시간', short: '빠름', desc: '도착 시간이 가장 짧은 경로', color: '#2563EB' }
+  if ((route.totalWalk ?? Infinity) === minWalk) return { label: '최소 도보', short: '적게 걷기', desc: '걷는 거리가 가장 짧은 경로', color: '#059669' }
+  if (transferCount === minTransfers) return { label: '환승 적음', short: '간단', desc: '갈아타는 부담이 낮은 경로', color: '#D97706' }
+  if ((route.totalFare || Infinity) === minFare) return { label: '최소 요금', short: '저렴', desc: '요금 부담이 가장 낮은 경로', color: '#7C3AED' }
+  return { label: route.pathTypeLabel || '대안 경로', short: '대안', desc: '다른 이동 방식을 선택할 수 있는 경로', color: '#64748B' }
 }
 
 export default function Route_() {
@@ -268,6 +311,7 @@ export default function Route_() {
   const airColor = AIR_COLOR[air?.grade] || '#64748B'
   const isLive = routeData?.coordsBased
   const bestRoute = transitRoutes?.[selectedRoute]
+  const selectedCriteria = getRouteCriteria(bestRoute, selectedRoute, transitRoutes || [])
   const hasExactRoute = Boolean(bestRoute?.steps?.length)
   const primaryTime = bestRoute?.totalTime || routeData?.duration
   const primaryWalk = bestRoute?.totalWalk ?? routeData?.walkDistance
@@ -529,6 +573,7 @@ export default function Route_() {
             placeCoords={placeCoords}
             startPlace={manualStart}
             viaPlace={viaPlace}
+            routeGuide={bestRoute}
             onCoordsReady={handleCoordsReady}
           />
         </div>
@@ -554,21 +599,51 @@ export default function Route_() {
 
             {/* 경로 선택 탭 */}
             {transitRoutes?.length > 1 && (
-              <div style={{ display: 'flex', padding: '10px 12px', gap: 8, borderBottom: '1px solid #F8FAFC' }}>
-                {transitRoutes.map((r, i) => (
-                  <button key={i} onClick={() => setSelectedRoute(i)} style={{
-                    padding: '6px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
-                    background: selectedRoute === i ? '#0D9488' : '#F8F9FA',
-                    color: selectedRoute === i ? '#fff' : '#64748B',
-                    transition: 'all 0.15s',
-                  }}>
-                    {i + 1}안 {pathTypeIcon(r.pathType)} {r.totalTime}분
-                  </button>
-                ))}
+              <div style={{ padding: '10px 12px', borderBottom: '1px solid #F8FAFC' }}>
+                <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
+                  {transitRoutes.map((r, i) => {
+                    const criteria = getRouteCriteria(r, i, transitRoutes)
+                    const active = selectedRoute === i
+                    return (
+                      <button key={i} onClick={() => setSelectedRoute(i)} style={{
+                        minWidth: 112,
+                        padding: '10px 12px',
+                        borderRadius: 18,
+                        border: active ? `2px solid ${criteria.color}` : '1px solid #E2E8F0',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        background: active ? criteria.color : '#F8FAFC',
+                        color: active ? '#fff' : '#334155',
+                        transition: 'all 0.15s',
+                        boxShadow: active ? '0 8px 18px rgba(13,148,136,0.18)' : 'none',
+                      }}>
+                        <span style={{ display: 'block', fontSize: 12, fontWeight: 950, marginBottom: 5 }}>
+                          {i + 1}안 · {criteria.short}
+                        </span>
+                        <span style={{ display: 'block', fontSize: 14, fontWeight: 950, lineHeight: 1.15 }}>
+                          {pathTypeIcon(r.pathType)} {r.totalTime}분
+                        </span>
+                        <span style={{ display: 'block', fontSize: 11, fontWeight: 800, opacity: active ? 0.9 : 0.72, marginTop: 5 }}>
+                          도보 {routeDistanceLabel(r.totalWalk)}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             )}
 
             <div style={{ padding: '14px 16px' }}>
+              {hasExactRoute && selectedCriteria && (
+                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 14, padding: '12px 14px', marginBottom: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: selectedCriteria.color, flexShrink: 0 }} />
+                    <p style={{ fontSize: 14, fontWeight: 950, color: '#0F172A', margin: 0 }}>{selectedRoute + 1}안 기준: {selectedCriteria.label}</p>
+                  </div>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#64748B', lineHeight: 1.45, margin: 0 }}>{selectedCriteria.desc}</p>
+                </div>
+              )}
+
               {/* 요약 정보 */}
               <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
                 {[

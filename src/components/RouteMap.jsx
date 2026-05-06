@@ -41,15 +41,68 @@ function pointOverlayHtml(name, color) {
   `
 }
 
-function drawDashedLine(kakao, map, path) {
+function drawRouteGuideLine(kakao, map, path) {
   return new kakao.maps.Polyline({
     map,
     path,
-    strokeWeight: 3,
+    strokeWeight: 5,
     strokeColor: '#0D9488',
-    strokeOpacity: 0.6,
-    strokeStyle: 'shortdash',
+    strokeOpacity: 0.78,
+    strokeStyle: 'solid',
   })
+}
+
+function compactRoutePoints(points) {
+  return points.filter(point =>
+    Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))
+  ).reduce((acc, point) => {
+    const normalized = { lat: Number(point.lat), lng: Number(point.lng) }
+    const prev = acc[acc.length - 1]
+    if (!prev || Math.abs(prev.lat - normalized.lat) > 0.00001 || Math.abs(prev.lng - normalized.lng) > 0.00001) {
+      acc.push(normalized)
+    }
+    return acc
+  }, [])
+}
+
+function toLatLng(kakao, point) {
+  return new kakao.maps.LatLng(point.lat, point.lng)
+}
+
+function createRoadLikePath(kakao, points) {
+  const normalized = compactRoutePoints(points)
+  if (normalized.length < 2) return normalized.map(point => toLatLng(kakao, point))
+
+  const shaped = [normalized[0]]
+  normalized.slice(1).forEach(point => {
+    const prev = shaped[shaped.length - 1]
+    const dLat = point.lat - prev.lat
+    const dLng = point.lng - prev.lng
+    shaped.push(
+      { lat: prev.lat + dLat * 0.32, lng: prev.lng },
+      { lat: prev.lat + dLat * 0.32, lng: prev.lng + dLng * 0.68 },
+      { lat: prev.lat + dLat * 0.72, lng: prev.lng + dLng * 0.68 },
+      point,
+    )
+  })
+
+  return compactRoutePoints(shaped).map(point => toLatLng(kakao, point))
+}
+
+function createRouteGuidePath(kakao, basePoints, routeGuide) {
+  const routePoints = compactRoutePoints(routeGuide?.routePoints || [])
+  if (routePoints.length >= 2) {
+    const points = compactRoutePoints([basePoints[0], ...routePoints, basePoints[basePoints.length - 1]])
+    return {
+      path: points.map(point => toLatLng(kakao, point)),
+      source: 'transit',
+    }
+  }
+
+  return {
+    path: createRoadLikePath(kakao, basePoints),
+    source: 'guide',
+  }
 }
 
 function getRouteDistance(points) {
@@ -77,7 +130,7 @@ function isInSeoul(lat, lng) {
     lng <= SEOUL_BOUNDS.maxLng
 }
 
-export default function RouteMap({ destination, placeCoords, startPlace, viaPlace, onCoordsReady }) {
+export default function RouteMap({ destination, placeCoords, startPlace, viaPlace, routeGuide, onCoordsReady }) {
   const mapDivRef   = useRef(null)
   const mapRef      = useRef(null)
   const overlayRef  = useRef([])
@@ -174,23 +227,26 @@ export default function RouteMap({ destination, placeCoords, startPlace, viaPlac
               overlayRef.current.push(viaOverlay)
             }
 
-            const linePath = [startLatLng, ...(viaLatLng ? [viaLatLng] : []), destLatLng]
-            polylineRef.current = drawDashedLine(kakao, map, linePath)
+            const basePoints = [
+              { lat: start.lat, lng: start.lng },
+              ...(viaPlace?.lat && viaPlace?.lng ? [{ lat: viaPlace.lat, lng: viaPlace.lng }] : []),
+              { lat: destLat, lng: destLng },
+            ]
+            const { path: linePath, source: lineSource } = createRouteGuidePath(kakao, basePoints, routeGuide)
+            polylineRef.current = drawRouteGuideLine(kakao, map, linePath)
 
             const bounds = new kakao.maps.LatLngBounds()
             linePath.forEach(point => bounds.extend(point))
             map.setBounds(bounds, 60, 60, 60, 60)
 
-            const points = [
-              { lat: start.lat, lng: start.lng },
-              ...(viaPlace?.lat && viaPlace?.lng ? [{ lat: viaPlace.lat, lng: viaPlace.lng }] : []),
-              { lat: destLat, lng: destLng },
-            ]
-            const dist = Math.round(getRouteDistance(points) * 1.35)
+            const dist = Math.round(getRouteDistance(basePoints) * 1.35)
             const duration = estimateDuration(dist)
 
             setDistInfo({ dist, duration })
-            setLocationNote('')
+            setLocationNote(lineSource === 'transit'
+              ? '지도 선은 정류장과 역 좌표를 이어 표시해요. 자세한 순서는 아래 전체 경로를 확인하세요.'
+              : '지도 선은 도로처럼 꺾어 보이도록 한 안내선이에요. 실제 순서는 아래 전체 경로를 확인하세요.'
+            )
             onCoordsReady?.({
               user: { lat: start.lat, lng: start.lng },
               via: viaPlace?.lat && viaPlace?.lng ? { lat: viaPlace.lat, lng: viaPlace.lng, name: viaPlace.name, address: viaPlace.address } : null,
@@ -252,7 +308,7 @@ export default function RouteMap({ destination, placeCoords, startPlace, viaPlac
       overlayRef.current = []
       if (polylineRef.current) { try { polylineRef.current.setMap(null) } catch {} polylineRef.current = null }
     }
-  }, [destination, placeCoords, startPlace, viaPlace])
+  }, [destination, placeCoords, startPlace, viaPlace, routeGuide])
 
   return (
     <div style={{
