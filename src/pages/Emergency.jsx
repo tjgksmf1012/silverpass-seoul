@@ -16,13 +16,23 @@ export default function Emergency() {
     setTimeout(() => setToast(''), 3000)
   }
 
+  function vibrateOnTap(pattern = 120) {
+    try {
+      if (navigator.vibrate) navigator.vibrate(pattern)
+    } catch {}
+  }
+
   useEffect(() => {
-    if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400])
     getNearbyEmergencyHospitals(profile.district || '종로구').then(setHospitals)
   }, [])
 
-  function call119() { window.location.href = 'tel:119' }
+  function call119() {
+    vibrateOnTap([120, 60, 120])
+    window.location.href = 'tel:119'
+  }
+
   function callGuardian() {
+    vibrateOnTap()
     if (profile.guardianPhone) {
       window.location.href = `tel:${profile.guardianPhone.replace(/-/g, '')}`
     } else {
