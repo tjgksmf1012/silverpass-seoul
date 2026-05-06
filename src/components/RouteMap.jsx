@@ -32,24 +32,42 @@ function destOverlayHtml(name) {
   `
 }
 
-function myOverlayHtml() {
+function pointOverlayHtml(name, color) {
   return `
     <div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 2px 4px rgba(37,99,235,0.4));">
-      <div style="background:#2563EB;color:#fff;font-size:11px;font-weight:700;font-family:'Pretendard Variable','맑은 고딕',sans-serif;padding:4px 9px;border-radius:20px;border:2px solid #fff;">현재 위치</div>
-      <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #2563EB;margin-top:-1px;"></div>
+      <div style="background:${color};color:#fff;font-size:11px;font-weight:700;font-family:'Pretendard Variable','맑은 고딕',sans-serif;padding:4px 9px;border-radius:20px;border:2px solid #fff;white-space:nowrap;">${name}</div>
+      <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid ${color};margin-top:-1px;"></div>
     </div>
   `
 }
 
-function drawDashedLine(kakao, map, from, to) {
+function drawDashedLine(kakao, map, path) {
   return new kakao.maps.Polyline({
     map,
-    path: [from, to],
+    path,
     strokeWeight: 3,
     strokeColor: '#0D9488',
     strokeOpacity: 0.6,
     strokeStyle: 'shortdash',
   })
+}
+
+function getRouteDistance(points) {
+  const R = 6371000
+  const toRad = d => d * Math.PI / 180
+
+  return points.slice(1).reduce((sum, point, index) => {
+    const prev = points[index]
+    const dLat = toRad(point.lat - prev.lat)
+    const dLon = toRad(point.lng - prev.lng)
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(prev.lat)) * Math.cos(toRad(point.lat)) * Math.sin(dLon / 2) ** 2
+    return sum + (R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)))
+  }, 0)
+}
+
+function estimateDuration(dist) {
+  return Math.max(8, Math.min(Math.ceil(dist / 1000 / 20 * 60) + 5 + Math.ceil(dist / 1000), 90))
 }
 
 function isInSeoul(lat, lng) {
@@ -59,7 +77,7 @@ function isInSeoul(lat, lng) {
     lng <= SEOUL_BOUNDS.maxLng
 }
 
-export default function RouteMap({ destination, placeCoords, onCoordsReady }) {
+export default function RouteMap({ destination, placeCoords, startPlace, viaPlace, onCoordsReady }) {
   const mapDivRef   = useRef(null)
   const mapRef      = useRef(null)
   const overlayRef  = useRef([])
@@ -70,7 +88,30 @@ export default function RouteMap({ destination, placeCoords, onCoordsReady }) {
 
   useEffect(() => {
     if (!mapDivRef.current) return
-    if (!KAKAO_KEY) { setStatus('nokey'); return }
+    setDistInfo(null)
+    setLocationNote('')
+    if (!KAKAO_KEY) {
+      setStatus('nokey')
+      if (startPlace?.lat && startPlace?.lng && placeCoords?.lat && placeCoords?.lng) {
+        const points = [
+          { lat: startPlace.lat, lng: startPlace.lng },
+          ...(viaPlace?.lat && viaPlace?.lng ? [{ lat: viaPlace.lat, lng: viaPlace.lng }] : []),
+          { lat: placeCoords.lat, lng: placeCoords.lng },
+        ]
+        const dist = Math.round(getRouteDistance(points) * 1.35)
+        setDistInfo({ dist, duration: estimateDuration(dist) })
+        onCoordsReady?.({
+          user: { lat: startPlace.lat, lng: startPlace.lng },
+          via: viaPlace?.lat && viaPlace?.lng ? { lat: viaPlace.lat, lng: viaPlace.lng, name: viaPlace.name, address: viaPlace.address } : null,
+          dest: { lat: placeCoords.lat, lng: placeCoords.lng },
+          dist,
+          duration: estimateDuration(dist),
+          source: 'manual',
+          startLabel: startPlace.name,
+        })
+      }
+      return
+    }
 
     let cancelled = false
 
@@ -109,6 +150,63 @@ export default function RouteMap({ destination, placeCoords, onCoordsReady }) {
           overlayRef.current.push(destOverlay)
           setStatus('ready')
 
+          function applyStart(start, source) {
+            const startLatLng = new kakao.maps.LatLng(start.lat, start.lng)
+            const viaLatLng = viaPlace?.lat && viaPlace?.lng
+              ? new kakao.maps.LatLng(viaPlace.lat, viaPlace.lng)
+              : null
+
+            const startOverlay = new kakao.maps.CustomOverlay({
+              position: startLatLng,
+              content: pointOverlayHtml(source === 'manual' ? '출발지' : '현재 위치', source === 'manual' ? '#7C3AED' : '#2563EB'),
+              yAnchor: 1.0,
+            })
+            startOverlay.setMap(map)
+            overlayRef.current.push(startOverlay)
+
+            if (viaLatLng) {
+              const viaOverlay = new kakao.maps.CustomOverlay({
+                position: viaLatLng,
+                content: pointOverlayHtml('경유지', '#D97706'),
+                yAnchor: 1.0,
+              })
+              viaOverlay.setMap(map)
+              overlayRef.current.push(viaOverlay)
+            }
+
+            const linePath = [startLatLng, ...(viaLatLng ? [viaLatLng] : []), destLatLng]
+            polylineRef.current = drawDashedLine(kakao, map, linePath)
+
+            const bounds = new kakao.maps.LatLngBounds()
+            linePath.forEach(point => bounds.extend(point))
+            map.setBounds(bounds, 60, 60, 60, 60)
+
+            const points = [
+              { lat: start.lat, lng: start.lng },
+              ...(viaPlace?.lat && viaPlace?.lng ? [{ lat: viaPlace.lat, lng: viaPlace.lng }] : []),
+              { lat: destLat, lng: destLng },
+            ]
+            const dist = Math.round(getRouteDistance(points) * 1.35)
+            const duration = estimateDuration(dist)
+
+            setDistInfo({ dist, duration })
+            setLocationNote('')
+            onCoordsReady?.({
+              user: { lat: start.lat, lng: start.lng },
+              via: viaPlace?.lat && viaPlace?.lng ? { lat: viaPlace.lat, lng: viaPlace.lng, name: viaPlace.name, address: viaPlace.address } : null,
+              dest: { lat: destLat, lng: destLng },
+              dist,
+              duration,
+              source,
+              startLabel: start.name || '',
+            })
+          }
+
+          if (startPlace?.lat && startPlace?.lng) {
+            applyStart(startPlace, 'manual')
+            return
+          }
+
           navigator.geolocation?.getCurrentPosition(
             pos => {
               if (cancelled || !mapRef.current) return
@@ -118,34 +216,7 @@ export default function RouteMap({ destination, placeCoords, onCoordsReady }) {
                 return
               }
 
-              const myLatLng = new kakao.maps.LatLng(lat, lon)
-              const myOverlay = new kakao.maps.CustomOverlay({
-                position: myLatLng,
-                content: myOverlayHtml(),
-                yAnchor: 1.0,
-              })
-              myOverlay.setMap(map)
-              overlayRef.current.push(myOverlay)
-
-              polylineRef.current = drawDashedLine(kakao, map, myLatLng, destLatLng)
-
-              const bounds = new kakao.maps.LatLngBounds()
-              bounds.extend(myLatLng)
-              bounds.extend(destLatLng)
-              map.setBounds(bounds, 60, 60, 60, 60)
-
-              const R = 6371000
-              const toRad = d => d * Math.PI / 180
-              const dLat = toRad(destLat - lat)
-              const dLon = toRad(destLng - lon)
-              const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat)) * Math.cos(toRad(destLat)) * Math.sin(dLon/2)**2
-              const straight = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-              const dist = Math.round(straight * 1.35)
-              const duration = Math.max(8, Math.min(Math.ceil(dist / 1000 / 20 * 60) + 5 + Math.ceil(dist / 1000), 90))
-
-              setDistInfo({ dist, duration })
-              setLocationNote('')
-              onCoordsReady?.({ user: { lat, lng: lon }, dest: { lat: destLat, lng: destLng }, dist, duration })
+              applyStart({ lat, lng: lon }, 'gps')
             },
             () => setLocationNote('위치 권한이 없어서 목적지 중심으로 표시해요'),
             { timeout: 5000 }
@@ -157,8 +228,9 @@ export default function RouteMap({ destination, placeCoords, onCoordsReady }) {
           onDestKnown(placeCoords.lat, placeCoords.lng)
         } else {
           const ps = new kakao.maps.services.Places()
+          const keyword = String(destination).includes('서울') ? destination : `서울 ${destination}`
           ps.keywordSearch(
-            `서울 ${destination}`,
+            keyword,
             (data, searchStatus) => {
               if (cancelled || !mapRef.current) return
               if (searchStatus !== kakao.maps.services.Status.OK || !data.length) {
@@ -180,7 +252,7 @@ export default function RouteMap({ destination, placeCoords, onCoordsReady }) {
       overlayRef.current = []
       if (polylineRef.current) { try { polylineRef.current.setMap(null) } catch {} polylineRef.current = null }
     }
-  }, [destination, placeCoords])
+  }, [destination, placeCoords, startPlace, viaPlace])
 
   return (
     <div style={{
@@ -217,8 +289,14 @@ export default function RouteMap({ destination, placeCoords, onCoordsReady }) {
           </span>
           {distInfo && (
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#2563EB', border: '2px solid #fff', boxShadow: '0 0 0 1px #2563EB' }} />
-              <span style={{ fontSize: 11, color: '#64748B' }}>현재 위치</span>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: startPlace ? '#7C3AED' : '#2563EB', border: '2px solid #fff', boxShadow: `0 0 0 1px ${startPlace ? '#7C3AED' : '#2563EB'}` }} />
+              <span style={{ fontSize: 11, color: '#64748B' }}>{startPlace ? '출발지' : '현재 위치'}</span>
+            </span>
+          )}
+          {viaPlace && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#D97706', border: '2px solid #fff', boxShadow: '0 0 0 1px #D97706' }} />
+              <span style={{ fontSize: 11, color: '#64748B' }}>경유지</span>
             </span>
           )}
         </div>

@@ -1,12 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { getProfile, addHistory } from '../services/storage.js'
 import { getRouteData, getRealtimeSubwayArrival } from '../services/seoulApi.js'
 import { generateRouteExplanation, generateSubwayGuide } from '../services/claude.js'
+import { searchPlaces } from '../services/kakaoSearch.js'
 import { searchTransitRoute, getRealtimeBusInfo, formatArrivalTime, pathTypeIcon } from '../services/odsayApi.js'
 import { getCurrentUser, getElderInfo, saveHistory } from '../services/auth.js'
 import { ArrowLeft, BusIcon, ElevatorIcon, WindIcon,
-         ShelterIcon, ShareIcon, AlertIcon } from '../components/Icons.jsx'
+         ShelterIcon, ShareIcon, AlertIcon, SearchIcon, MapPin } from '../components/Icons.jsx'
 import RouteMap from '../components/RouteMap.jsx'
 
 const BURDEN = {
@@ -15,6 +16,52 @@ const BURDEN = {
   high:   { bg: '#FEF2F2', border: '#FECACA', text: '#991B1B', accent: '#DC2626', label: '힘들 수 있어요', sub: '보호자와 함께 이동하세요' },
 }
 const AIR_COLOR = { '좋음': '#059669', '보통': '#D97706', '나쁨': '#DC2626', '매우나쁨': '#7C2D12' }
+
+const QUICK_ROUTE_POINTS = [
+  { name: '서울역', address: '서울 중구 한강대로 405', lat: 37.5546788, lng: 126.9706069 },
+  { name: '서울시청', address: '서울 중구 세종대로 110', lat: 37.5662952, lng: 126.9779451 },
+  { name: '강남역', address: '서울 강남구 강남대로 396', lat: 37.497952, lng: 127.027619 },
+]
+
+function normalizeRoutePoint(place) {
+  const lat = Number(place?.lat)
+  const lng = Number(place?.lng)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  return {
+    name: place.name || place.label || place.address || '선택한 장소',
+    address: place.address || place.name || place.label || '',
+    lat,
+    lng,
+  }
+}
+
+function coordKey(coords) {
+  const via = coords?.via ? `${coords.via.lat},${coords.via.lng}` : 'none'
+  return `${coords?.user?.lat},${coords?.user?.lng}:${via}:${coords?.dest?.lat},${coords?.dest?.lng}`
+}
+
+function combineViaRoutes(firstLeg, secondLeg, via) {
+  const viaStep = {
+    type: 'walk',
+    title: `${via?.name || '경유지'} 들르기`,
+    detail: via?.address || '경유지를 지나 다음 이동으로 이어가요.',
+    meta: '경유',
+  }
+  const steps = [...(firstLeg.steps || []), viaStep, ...(secondLeg.steps || [])]
+  return {
+    ...secondLeg,
+    pathType: 3,
+    pathTypeLabel: '경유 경로',
+    totalTime: (firstLeg.totalTime || 0) + (secondLeg.totalTime || 0),
+    totalDistance: (firstLeg.totalDistance || 0) + (secondLeg.totalDistance || 0),
+    totalWalk: (firstLeg.totalWalk || 0) + (secondLeg.totalWalk || 0),
+    totalFare: Math.max(firstLeg.totalFare || 0, secondLeg.totalFare || 0),
+    busTransitCount: (firstLeg.busTransitCount || 0) + (secondLeg.busTransitCount || 0),
+    subwayTransitCount: (firstLeg.subwayTransitCount || 0) + (secondLeg.subwayTransitCount || 0),
+    steps,
+    firstBusStep: steps.find(s => s.type === 'bus') || null,
+  }
+}
 
 export default function Route_() {
   const navigate = useNavigate()
@@ -30,13 +77,69 @@ export default function Route_() {
   const [liveCoords, setLiveCoords]       = useState(null)
   const [selectedRoute, setSelectedRoute] = useState(0)     // 선택된 경로 인덱스
   const [healthNotes, setHealthNotes]     = useState('')
+  const [manualStart, setManualStart]     = useState(() => normalizeRoutePoint(state?.startPlace || state?.parsed?.startPlace))
+  const [viaPlace, setViaPlace]           = useState(() => normalizeRoutePoint(state?.viaPlace || state?.parsed?.viaPlace))
+  const [pointEditor, setPointEditor]     = useState(null)  // start | via
+  const [pointQuery, setPointQuery]       = useState('')
+  const [pointSuggestions, setPointSuggestions] = useState([])
+  const [pointSearching, setPointSearching] = useState(false)
   const coordsApplied = useRef(false)
 
   const profile = getProfile()
   const destination = state?.parsed?.destination || state?.query || '목적지'
-  const placeCoords = (state?.parsed?.lat && state?.parsed?.lng)
+  const placeCoords = useMemo(() => (state?.parsed?.lat && state?.parsed?.lng)
     ? { lat: state.parsed.lat, lng: state.parsed.lng }
-    : null
+    : null, [state?.parsed?.lat, state?.parsed?.lng])
+
+  function resetTransitRoute() {
+    coordsApplied.current = false
+    setTransitRoutes(null)
+    setRealtimeBus(null)
+    setSelectedRoute(0)
+    setLiveCoords(null)
+    setRouteData(prev => prev ? { ...prev, coordsBased: false, coordSource: null, startLabel: null, viaLabel: null } : prev)
+  }
+
+  function openPointEditor(type) {
+    setPointEditor(type)
+    setPointQuery(type === 'start' ? (manualStart?.name || '') : (viaPlace?.name || ''))
+    setPointSuggestions([])
+  }
+
+  function applyRoutePoint(place, type = pointEditor) {
+    const point = normalizeRoutePoint(place)
+    if (!point) return
+    if (type === 'via') setViaPlace(point)
+    else setManualStart(point)
+    setPointEditor(null)
+    setPointQuery('')
+    setPointSuggestions([])
+    resetTransitRoute()
+  }
+
+  function clearRoutePoint(type) {
+    if (type === 'via') setViaPlace(null)
+    else setManualStart(null)
+    setPointEditor(null)
+    setPointQuery('')
+    setPointSuggestions([])
+    resetTransitRoute()
+  }
+
+  async function searchRoutePoint() {
+    const text = pointQuery.trim()
+    if (!text) return
+    setPointSearching(true)
+    setPointSuggestions([{ name: '검색 중...', address: '', isLoading: true }])
+    try {
+      const results = await searchPlaces(text)
+      setPointSuggestions(results.length ? results : [{ name: '검색 결과 없음', address: text, isEmpty: true }])
+    } catch {
+      setPointSuggestions([{ name: '검색 결과 없음', address: text, isEmpty: true }])
+    } finally {
+      setPointSearching(false)
+    }
+  }
 
   // ── 초기 로드 ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -69,9 +172,13 @@ export default function Route_() {
 
   // ── 카카오맵 좌표 콜백 → ODsay 실제 경로 탐색 ────────────────────────────
   const handleCoordsReady = useCallback(async (coords) => {
-    if (coordsApplied.current) return
-    coordsApplied.current = true
+    const key = coordKey(coords)
+    if (coordsApplied.current === key) return
+    coordsApplied.current = key
     setLiveCoords(coords)
+    setSelectedRoute(0)
+    setTransitRoutes(null)
+    setRealtimeBus(null)
 
     // 거리/시간 즉시 업데이트
     setRouteData(prev => prev ? {
@@ -79,13 +186,27 @@ export default function Route_() {
       walkDistance: coords.dist,
       duration: coords.duration,
       coordsBased: true,
+      coordSource: coords.source || 'gps',
+      startLabel: coords.startLabel || '',
+      viaLabel: coords.via?.name || '',
     } : prev)
 
     // ODsay 경로 탐색 (출발: user, 도착: dest. 경도/위도 순서 주의)
-    const routes = await searchTransitRoute(
-      coords.user.lng, coords.user.lat,  // SX=경도, SY=위도
-      coords.dest.lng, coords.dest.lat
-    )
+    let routes = null
+    if (coords.via?.lat && coords.via?.lng) {
+      const [firstLeg, secondLeg] = await Promise.all([
+        searchTransitRoute(coords.user.lng, coords.user.lat, coords.via.lng, coords.via.lat),
+        searchTransitRoute(coords.via.lng, coords.via.lat, coords.dest.lng, coords.dest.lat),
+      ])
+      if (firstLeg?.length && secondLeg?.length) {
+        routes = [combineViaRoutes(firstLeg[0], secondLeg[0], coords.via)]
+      }
+    } else {
+      routes = await searchTransitRoute(
+        coords.user.lng, coords.user.lat,  // SX=경도, SY=위도
+        coords.dest.lng, coords.dest.lat
+      )
+    }
     if (routes?.length) {
       setTransitRoutes(routes)
       // 첫 경로의 첫 버스 정류장 실시간 도착 조회
@@ -95,6 +216,8 @@ export default function Route_() {
         const real = await getRealtimeBusInfo(firstBus.startStationId, busIds)
         setRealtimeBus(real)
       }
+    } else {
+      setTransitRoutes(null)
     }
   }, [])
 
@@ -151,6 +274,17 @@ export default function Route_() {
   const memo = healthNotes.trim()
   const memoShort = memo.length > 48 ? `${memo.slice(0, 48)}...` : memo
   const firstBusStepIndex = bestRoute?.steps?.findIndex(s => s.type === 'bus') ?? -1
+  const isManualRoute = manualStart || routeData?.coordSource === 'manual'
+  const startDisplay = manualStart?.name || routeData?.startLabel || '현재 위치'
+  const routeBadge = hasExactRoute
+    ? (isManualRoute ? '직접 지정 경로' : 'ODsay 실시간')
+    : (manualStart ? '출발지 반영' : '위치 허용 필요')
+  const noExactTitle = manualStart
+    ? '선택한 출발지 기준으로 경로를 준비 중이에요'
+    : '정확한 정류장·환승 순서는 위치 허용 후 표시돼요'
+  const noExactBody = manualStart
+    ? '주소 좌표를 기준으로 다시 계산합니다. 경로 API 결과가 오면 걷기, 버스, 지하철 순서로 바뀝니다.'
+    : '현재는 기본 안내입니다. 위치를 허용하면 몇 분 걷고, 몇 번 버스나 어떤 지하철을 타는지 전체 순서로 바뀝니다.'
 
   const formatDistance = (meters) => {
     if (meters == null) return '-'
@@ -195,9 +329,9 @@ export default function Route_() {
     const firstBus = routeData?.buses?.find(bus => bus.isLowFloor) || routeData?.buses?.[0]
     const steps = [{
       type: 'walk',
-      title: '현재 위치에서 가까운 정류장까지 걷기',
-      detail: '위치 권한을 허용하면 정확한 정류장과 도보 거리가 표시돼요.',
-      meta: routeData?.walkDistance ? `약 ${formatDistance(routeData.walkDistance)}` : '위치 필요',
+      title: `${startDisplay}에서 가까운 정류장까지 걷기`,
+      detail: manualStart ? `${manualStart.address || startDisplay} 기준으로 안내해요.` : '위치 권한을 허용하면 정확한 정류장과 도보 거리가 표시돼요.',
+      meta: routeData?.walkDistance ? `약 ${formatDistance(routeData.walkDistance)}` : (manualStart ? '주소 기준' : '위치 필요'),
     }]
 
     if (firstBus) {
@@ -220,6 +354,15 @@ export default function Route_() {
         stationCount: 0,
         way: subwayGuide.direction,
         fallbackExit: subwayGuide.exitNumber,
+      })
+    }
+
+    if (viaPlace) {
+      steps.push({
+        type: 'walk',
+        title: `${viaPlace.name} 경유지 확인`,
+        detail: '정확 경로가 확인되면 경유 순서에 맞춰 다시 표시돼요.',
+        meta: '경유',
       })
     }
 
@@ -253,15 +396,98 @@ export default function Route_() {
             <span style={{ fontSize: 16, fontWeight: 800 }}>분</span>
           </p>
           {bestRoute
-            ? <span style={{ fontSize: 12, background: '#F0FDFA', color: '#059669', fontWeight: 900, padding: '3px 8px', borderRadius: 20 }}>🚌 실시간</span>
+            ? <span style={{ fontSize: 12, background: '#F0FDFA', color: '#059669', fontWeight: 900, padding: '3px 8px', borderRadius: 20 }}>{isManualRoute ? '📍 직접 지정' : '🚌 실시간'}</span>
             : isLive
-              ? <span style={{ fontSize: 12, background: '#ECFDF5', color: '#059669', fontWeight: 900, padding: '3px 8px', borderRadius: 20 }}>📍 GPS</span>
+              ? <span style={{ fontSize: 12, background: '#ECFDF5', color: '#059669', fontWeight: 900, padding: '3px 8px', borderRadius: 20 }}>{isManualRoute ? '📍 출발지 지정' : '📍 GPS'}</span>
               : <p style={{ fontSize: 12, color: '#64748B', margin: '3px 0 0', fontWeight: 700 }}>대중교통 추정</p>
           }
         </div>
       </div>
 
       <div style={{ padding: '16px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+        {/* ── 출발지/경유지 지정 ── */}
+        <div style={{ order: 0, background: '#fff', border: '1.5px solid #D9F7EF', borderRadius: 18, padding: '14px 16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <MapPin size={17} color="#0D9488" stroke={2} />
+            <p style={{ fontSize: 15, fontWeight: 950, color: '#0F172A', margin: 0 }}>경로 기준</p>
+            <span style={{ marginLeft: 'auto', background: manualStart ? '#F5F3FF' : '#F0FDFA', color: manualStart ? '#7C3AED' : '#0D9488', fontSize: 11, fontWeight: 900, padding: '4px 8px', borderRadius: 20 }}>
+              {manualStart ? '출발지 직접 지정' : '현재 위치'}
+            </span>
+          </div>
+
+          {[
+            { type: 'start', label: '출발지', value: manualStart?.name || '현재 위치', sub: manualStart?.address || (liveCoords ? 'GPS 기준' : '직접 지정 가능'), color: manualStart ? '#7C3AED' : '#2563EB' },
+            { type: 'via', label: '경유지', value: viaPlace?.name || '없음', sub: viaPlace?.address || '선택 사항', color: '#D97706' },
+          ].map(row => (
+            <div key={row.type} style={{ display: 'grid', gridTemplateColumns: '18px 1fr auto', gap: 10, alignItems: 'center', padding: row.type === 'start' ? '0 0 10px' : '10px 0 0', borderTop: row.type === 'via' ? '1px solid #F1F5F9' : 'none' }}>
+              <div style={{ width: 12, height: 12, borderRadius: '50%', background: row.color, boxShadow: `0 0 0 4px ${row.type === 'via' ? '#FEF3C7' : '#EFF6FF'}` }} />
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontSize: 12, color: '#64748B', fontWeight: 900, margin: '0 0 2px' }}>{row.label}</p>
+                <p style={{ fontSize: 16, color: '#0F172A', fontWeight: 950, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.value}</p>
+                <p style={{ fontSize: 12, color: '#94A3B8', fontWeight: 700, margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.sub}</p>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {row.type === 'start' && manualStart && (
+                  <button onClick={() => clearRoutePoint('start')} style={{ border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#475569', borderRadius: 12, padding: '9px 10px', fontSize: 12, fontWeight: 900, cursor: 'pointer' }}>현재위치</button>
+                )}
+                {row.type === 'via' && viaPlace && (
+                  <button onClick={() => clearRoutePoint('via')} style={{ border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#475569', borderRadius: 12, padding: '9px 10px', fontSize: 12, fontWeight: 900, cursor: 'pointer' }}>삭제</button>
+                )}
+                <button onClick={() => openPointEditor(row.type)} style={{ border: 'none', background: row.type === 'start' ? '#0D9488' : '#FFF7ED', color: row.type === 'start' ? '#fff' : '#C2410C', borderRadius: 12, padding: '10px 12px', fontSize: 13, fontWeight: 950, cursor: 'pointer' }}>
+                  {row.type === 'start' ? '변경' : (viaPlace ? '변경' : '추가')}
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {pointEditor && (
+            <div style={{ marginTop: 14, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 16, padding: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1.5px solid #CBD5E1', borderRadius: 14, padding: '0 12px' }}>
+                  <SearchIcon size={18} color="#64748B" stroke={2} />
+                  <input
+                    value={pointQuery}
+                    onChange={e => setPointQuery(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && searchRoutePoint()}
+                    placeholder={pointEditor === 'start' ? '출발지 검색' : '경유지 검색'}
+                    style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', minHeight: 48, fontSize: 16, fontWeight: 800, color: '#0F172A', fontFamily: 'inherit' }}
+                  />
+                </div>
+                <button onClick={searchRoutePoint} disabled={pointSearching} style={{ border: 'none', background: '#0D9488', color: '#fff', borderRadius: 14, height: 50, padding: '0 16px', fontSize: 14, fontWeight: 950, cursor: pointSearching ? 'default' : 'pointer', opacity: pointSearching ? 0.65 : 1 }}>
+                  검색
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+                {QUICK_ROUTE_POINTS.map(point => (
+                  <button key={point.name} onClick={() => applyRoutePoint(point, pointEditor)} style={{ border: '1px solid #CCFBF1', background: '#fff', color: '#0F766E', borderRadius: 20, padding: '8px 11px', fontSize: 13, fontWeight: 900, cursor: 'pointer' }}>
+                    {point.name}
+                  </button>
+                ))}
+              </div>
+
+              {pointSuggestions.length > 0 && (
+                <div style={{ marginTop: 10, background: '#fff', borderRadius: 14, overflow: 'hidden', border: '1px solid #E2E8F0' }}>
+                  {pointSuggestions.map((place, i) => (
+                    <button
+                      key={`${place.name}-${i}`}
+                      onClick={() => !place.isLoading && !place.isEmpty && applyRoutePoint(place, pointEditor)}
+                      disabled={place.isLoading || place.isEmpty}
+                      style={{ width: '100%', border: 'none', background: '#fff', padding: '13px 14px', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', borderTop: i > 0 ? '1px solid #F1F5F9' : 'none', cursor: place.isLoading || place.isEmpty ? 'default' : 'pointer', opacity: place.isEmpty ? 0.65 : 1, fontFamily: 'inherit' }}
+                    >
+                      <MapPin size={18} color="#0D9488" stroke={2} />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <p style={{ fontSize: 15, color: '#0F172A', fontWeight: 950, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{place.name}</p>
+                        {place.address && <p style={{ fontSize: 12, color: '#64748B', fontWeight: 700, margin: '3px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{place.address}</p>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* ── 이동 안전 체크 ── */}
         <div style={{ order: 4, background: b.bg, border: `1.5px solid ${b.border}`, borderRadius: 22, padding: '22px 20px 18px' }}>
@@ -298,7 +524,13 @@ export default function Route_() {
 
         {/* ── ② 지도 ── */}
         <div style={{ order: 3 }}>
-          <RouteMap destination={destination} placeCoords={placeCoords} onCoordsReady={handleCoordsReady} />
+          <RouteMap
+            destination={destination}
+            placeCoords={placeCoords}
+            startPlace={manualStart}
+            viaPlace={viaPlace}
+            onCoordsReady={handleCoordsReady}
+          />
         </div>
 
         {/* ── ③ 경고 배너 ── */}
@@ -316,7 +548,7 @@ export default function Route_() {
               <div style={{ width: 7, height: 7, borderRadius: '50%', background: hasExactRoute ? '#059669' : '#F59E0B', animation: hasExactRoute ? 'liveP 1.5s infinite' : 'none' }} />
               <p style={{ fontWeight: 900, fontSize: 15, color: '#0F172A', margin: 0 }}>{hasExactRoute ? '정확한 전체 경로' : '전체 경로 안내'}</p>
               <span style={{ marginLeft: 'auto', background: hasExactRoute ? '#F0FDFA' : '#FFF7ED', color: hasExactRoute ? '#059669' : '#C2410C', fontSize: 11, fontWeight: 800, padding: '3px 9px', borderRadius: 20 }}>
-                {hasExactRoute ? 'ODsay 실시간' : '위치 허용 필요'}
+                {routeBadge}
               </span>
             </div>
 
@@ -353,8 +585,8 @@ export default function Route_() {
 
               {!hasExactRoute && (
                 <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 14, padding: '12px 14px', marginBottom: 14 }}>
-                  <p style={{ fontSize: 14, color: '#9A3412', fontWeight: 900, margin: '0 0 4px' }}>정확한 정류장·환승 순서는 위치 허용 후 표시돼요</p>
-                  <p style={{ fontSize: 13, color: '#C2410C', fontWeight: 700, lineHeight: 1.5, margin: 0 }}>현재는 기본 안내입니다. 위치를 허용하면 몇 분 걷고, 몇 번 버스나 어떤 지하철을 타는지 전체 순서로 바뀝니다.</p>
+                  <p style={{ fontSize: 14, color: '#9A3412', fontWeight: 900, margin: '0 0 4px' }}>{noExactTitle}</p>
+                  <p style={{ fontSize: 13, color: '#C2410C', fontWeight: 700, lineHeight: 1.5, margin: 0 }}>{noExactBody}</p>
                 </div>
               )}
 
