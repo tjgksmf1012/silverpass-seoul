@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "verify:prod": "node scripts/verify-prod.mjs"
+    "verify:prod": "node scripts/verify-prod.mjs",
+    "verify:tmap": "node scripts/verify-prod.mjs --require-tmap"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",

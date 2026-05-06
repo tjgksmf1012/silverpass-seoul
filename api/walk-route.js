@@ -7,6 +7,7 @@ const SEOUL_BOUNDS = {
 
 const MAX_DIRECT_DISTANCE_M = 3500
 const TMAP_KEY = process.env.TMAP_API_KEY || process.env.SK_OPENAPI_APP_KEY || ''
+const TMAP_SEARCH_OPTIONS = new Set(['0', '4', '10', '30'])
 
 function numberOrNull(value) {
   const number = Number(value)
@@ -41,6 +42,17 @@ function compactPoints(points) {
     }
     return acc
   }, [])
+}
+
+function tmapIssueCode(status, payload) {
+  const error = payload?.error || payload
+  const code = error?.code || error?.id || status
+  return `tmap_${status}_${String(code).replace(/[^a-zA-Z0-9_-]/g, '_')}`
+}
+
+function tmapSearchOption(value) {
+  const option = String(value ?? '0')
+  return TMAP_SEARCH_OPTIONS.has(option) ? option : '0'
 }
 
 function maneuverPoint(step) {
@@ -106,7 +118,7 @@ function normalizeTmapStep(feature, index) {
   }
 }
 
-async function getTmapWalkingRoute(start, end) {
+async function getTmapWalkingRoute(start, end, searchOption) {
   if (!TMAP_KEY) return null
   const url = new URL('https://apis.openapi.sk.com/tmap/routes/pedestrian')
   url.searchParams.set('version', '1')
@@ -128,12 +140,22 @@ async function getTmapWalkingRoute(start, end) {
       endName: '도착지',
       reqCoordType: 'WGS84GEO',
       resCoordType: 'WGS84GEO',
-      searchOption: 0,
+      searchOption,
     }),
     signal: AbortSignal.timeout(6500),
   })
-  if (!upstream.ok) return null
-  const json = await upstream.json()
+  const text = await upstream.text()
+  let json
+  try {
+    json = JSON.parse(text)
+  } catch {
+    json = null
+  }
+  if (!upstream.ok) {
+    const error = new Error(tmapIssueCode(upstream.status, json))
+    error.publicCode = error.message
+    throw error
+  }
   const features = json?.features || []
   const points = compactTmapLinePoints(features)
   if (points.length < 2) return null
@@ -145,6 +167,7 @@ async function getTmapWalkingRoute(start, end) {
     .slice(0, 16)
   return {
     source: 'TMAP pedestrian',
+    searchOption,
     distance: Math.round(summary.totalDistance || directDistance(start, end)),
     duration: Math.max(1, Math.round((summary.totalTime || 0) / 60)) || Math.max(1, Math.ceil(directDistance(start, end) / 65)),
     points,
@@ -153,6 +176,8 @@ async function getTmapWalkingRoute(start, end) {
 }
 
 export default async function handler(req, res) {
+  const searchOption = tmapSearchOption(req.query.searchOption)
+  const debug = req.query.debug === '1'
   const start = {
     lat: numberOrNull(req.query.startLat),
     lng: numberOrNull(req.query.startLng),
@@ -172,13 +197,19 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'walk_segment_too_long' })
   }
 
-  try {
-    const tmapRoute = await getTmapWalkingRoute(start, end)
-    if (tmapRoute) {
-      res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=604800')
-      return res.status(200).json(tmapRoute)
+  let tmapIssue = TMAP_KEY ? '' : 'tmap_key_missing'
+  if (TMAP_KEY) {
+    try {
+      const tmapRoute = await getTmapWalkingRoute(start, end, searchOption)
+      if (tmapRoute) {
+        res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=604800')
+        return res.status(200).json(tmapRoute)
+      }
+      tmapIssue = 'tmap_empty_route'
+    } catch (error) {
+      tmapIssue = error?.publicCode || 'tmap_request_failed'
     }
-  } catch {}
+  }
 
   const url = new URL(`https://router.project-osrm.org/route/v1/foot/${start.lng},${start.lat};${end.lng},${end.lat}`)
   url.searchParams.set('overview', 'full')
@@ -202,13 +233,15 @@ export default async function handler(req, res) {
     }
 
     res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=604800')
-    return res.status(200).json({
+    const body = {
       source: 'OSRM foot',
       distance: Math.round(route.distance || directDistance(start, end)),
       duration: Math.max(1, Math.round((route.duration || 0) / 60)),
       points,
       steps: routeSteps(route),
-    })
+    }
+    if (debug) body.tmapIssue = tmapIssue
+    return res.status(200).json(body)
   } catch (error) {
     return res.status(504).json({ error: 'walk_route_timeout' })
   }

@@ -89,6 +89,12 @@ function canTrustWalkingRoute(step, walkingRoute) {
   return routed <= Math.max(expected * 2.4, expected + 350)
 }
 
+function walkingSearchOption(options = {}) {
+  if (options.avoidStairs) return '30'
+  if (options.preferMainRoad) return '4'
+  return '0'
+}
+
 async function getWalkingRouteFromOsrm(start, end) {
   const url = new URL(`https://router.project-osrm.org/route/v1/foot/${start.lng},${start.lat};${end.lng},${end.lat}`)
   url.searchParams.set('overview', 'full')
@@ -130,7 +136,7 @@ function inferWalkEndpoints(step, index, steps, routeStart, routeEnd) {
   return hasCoords(start) && hasCoords(end) ? { start, end } : null
 }
 
-export async function getWalkingRoute(start, end) {
+export async function getWalkingRoute(start, end, options = {}) {
   if (!hasCoords(start) || !hasCoords(end)) return null
   const direct = directDistance(start, end)
   if (!Number.isFinite(direct) || direct <= 15 || direct > MAX_WALK_ROUTE_DISTANCE_M) return null
@@ -141,6 +147,7 @@ export async function getWalkingRoute(start, end) {
     endLat: String(end.lat),
     endLng: String(end.lng),
     detail: 'turns-v2',
+    searchOption: walkingSearchOption(options),
   })
 
   try {
@@ -153,7 +160,7 @@ export async function getWalkingRoute(start, end) {
   }
 }
 
-export async function enhanceRouteWalkingGeometry(route, routeStart, routeEnd) {
+export async function enhanceRouteWalkingGeometry(route, routeStart, routeEnd, options = {}) {
   const steps = route?.steps || []
   if (!steps.length) return route
 
@@ -162,7 +169,7 @@ export async function enhanceRouteWalkingGeometry(route, routeStart, routeEnd) {
     const endpoints = inferWalkEndpoints(step, index, steps, routeStart, routeEnd)
     if (!endpoints) return step
 
-    const walkingRoute = await getWalkingRoute(endpoints.start, endpoints.end)
+    const walkingRoute = await getWalkingRoute(endpoints.start, endpoints.end, options)
     if (!canTrustWalkingRoute(step, walkingRoute)) {
       return {
         ...step,
@@ -180,6 +187,7 @@ export async function enhanceRouteWalkingGeometry(route, routeStart, routeEnd) {
       endPoint: endpoints.end,
       routePoints: walkingRoute.points,
       routeSource: 'walking-route',
+      walkingProvider: walkingRoute.source,
       walkingDistance: walkingRoute.distance,
       walkingDuration: walkingRoute.duration,
       walkInstructions: walkingRoute.steps,

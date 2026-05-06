@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 const BASE_URL = process.env.SILVERPASS_BASE_URL || 'https://silverpass-seoul.vercel.app'
 const EXPECT_EMPTY_DB = process.argv.includes('--expect-empty-db')
+const REQUIRE_TMAP = process.argv.includes('--require-tmap')
 
 const env = loadEnv()
 const checks = []
@@ -71,8 +72,16 @@ async function checkProductionApis() {
   const subway = await fetchJson(`/api/subway?station=${encodeURIComponent('시청')}`)
   add('api:subway-arrival', subway.res.ok && !subway.json._demo && Boolean(subway.json?.realtimeArrivalList?.length), `${subway.res.status} ${subway.ms}ms`)
 
-  const walkRoute = await fetchJson('/api/walk-route?startLat=37.5546788&startLng=126.9706069&endLat=37.555516&endLng=126.972203')
-  add('api:walk-route', walkRoute.res.ok && walkRoute.json?.points?.length >= 2, `${walkRoute.res.status} ${walkRoute.ms}ms points=${walkRoute.json?.points?.length || 0}`)
+  const walkRoute = await fetchJson('/api/walk-route?startLat=37.5546788&startLng=126.9706069&endLat=37.555516&endLng=126.972203&searchOption=30&debug=1')
+  const walkSource = walkRoute.json?.source || 'unknown'
+  const tmapActive = /tmap/i.test(walkSource)
+  const tmapDetail = walkRoute.json?.tmapIssue ? ` tmapIssue=${walkRoute.json.tmapIssue}` : ''
+  add('api:walk-route', walkRoute.res.ok && walkRoute.json?.points?.length >= 2, `${walkRoute.res.status} ${walkRoute.ms}ms source=${walkSource} points=${walkRoute.json?.points?.length || 0}${tmapDetail}`)
+  add(
+    'api:walk-route-tmap',
+    REQUIRE_TMAP ? tmapActive : true,
+    tmapActive ? 'TMAP pedestrian active' : `fallback=${walkSource}${tmapDetail}`,
+  )
 }
 
 async function checkOdsay() {
@@ -128,6 +137,7 @@ for (const name of [
   'SEOUL_API_KEY',
   'SEOUL_SUBWAY_API_KEY',
   'GONGGONG_API_KEY',
+  'TMAP_API_KEY',
 ]) {
   optionalEnv(name, 'production API smoke tests verify it')
 }

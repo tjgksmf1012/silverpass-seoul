@@ -127,6 +127,13 @@ function scoreRouteForProfile(route, profile = {}) {
   return score
 }
 
+function walkingOptionsForProfile(profile = {}) {
+  return {
+    avoidStairs: !profile.allowStairs || profile.preferElevator || profile.mobilityAid,
+    preferMainRoad: profile.slowPace || profile.needRestStops,
+  }
+}
+
 function applyRoutePreferences(routes, profile = {}) {
   return [...routes]
     .map((route, originalIndex) => ({
@@ -532,8 +539,9 @@ export default function Route_() {
 
     const routeStart = { lat: coords.user.lat, lng: coords.user.lng }
     const routeEnd = { lat: coords.dest.lat, lng: coords.dest.lng }
+    const walkingOptions = walkingOptionsForProfile(profile)
     if (!coords.via?.lat && coords.dist <= WALK_ONLY_FALLBACK_DISTANCE_M * 2) {
-      getWalkingRoute(routeStart, routeEnd)
+      getWalkingRoute(routeStart, routeEnd, walkingOptions)
         .then(walk => {
           if (coordsApplied.current === key) setWalkOnlyGeometry(walk)
         })
@@ -557,7 +565,7 @@ export default function Route_() {
       )
     }
     if (routes?.length) {
-      routes = await Promise.all(routes.map(route => enhanceRouteWalkingGeometry(route, routeStart, routeEnd)))
+      routes = await Promise.all(routes.map(route => enhanceRouteWalkingGeometry(route, routeStart, routeEnd, walkingOptions)))
       if (coordsApplied.current !== key) return
       const rankedRoutes = applyRoutePreferences(routes, profile)
       setTransitRoutes(rankedRoutes)
