@@ -184,6 +184,92 @@ function summarizeStops(stops = [], limit = 4) {
   return `${shown.join(' → ')}${middle.length > limit ? ' → ...' : ''}`
 }
 
+function normalizeDirectionText(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  if (/방면$|행$/.test(text)) return text
+  return `${text} 방면`
+}
+
+function busDirectionText(step) {
+  return normalizeDirectionText(
+    step?.direction ||
+    step?.lines?.find(line => line.direction)?.direction ||
+    step?.endStationName ||
+    step?.endName,
+  ) || '버스 전면 행선지 확인'
+}
+
+function busBoardingText(step) {
+  const station = step?.startStationName || step?.startName || '승차 정류장'
+  return step?.startStopNo ? `${station} (${step.startStopNo})` : station
+}
+
+function busAlightText(step) {
+  const end = step?.endStationName || step?.endName || '내릴 정류장'
+  if (step?.beforeEndStopName && step.beforeEndStopName !== end) {
+    return `${step.beforeEndStopName} 다음 정류장인 ${end}`
+  }
+  return end
+}
+
+function busAlightCueText(step) {
+  const end = step?.endStationName || step?.endName || '내릴 정류장'
+  if (step?.beforeEndStopName && step.beforeEndStopName !== end) {
+    return `${step.beforeEndStopName} 다음 정류장`
+  }
+  return `${end} 안내 방송/전광판`
+}
+
+function subwayExitText(step) {
+  const exit = String(step?.endExitNo || step?.fallbackExit || '').trim().replace(/번\s*출구$/, '')
+  if (exit) return `${exit}번 출구`
+  return '출구·승강기 안내판'
+}
+
+function subwayExitInstructionText(step) {
+  const exit = subwayExitText(step)
+  return exit.includes('안내판') ? `${exit}을 확인하세요` : `${exit}를 확인하세요`
+}
+
+function subwayDoorText(step) {
+  const door = String(step?.door || '').trim()
+  if (door) return `${door} 근처`
+  return '승강기 표지 가까운 칸'
+}
+
+function walkInstructionText(step, limit = 2) {
+  const names = (step?.walkInstructions || [])
+    .map(item => String(item?.name || '').trim())
+    .filter(Boolean)
+    .filter((name, index, arr) => arr.indexOf(name) === index)
+    .slice(0, limit)
+  if (!names.length) return ''
+  return `${names.join(' → ')} 따라 이동`
+}
+
+function guideTipsForStep(step) {
+  if (!step) return []
+  if (step.type === 'walk') {
+    return [
+      walkInstructionText(step) && { label: '길', value: walkInstructionText(step) },
+      step.routeSource === 'walking-route' && { label: '지도', value: '파란 보행 경로 우선' },
+    ].filter(Boolean)
+  }
+  if (step.type === 'bus') {
+    return [
+      { label: '타는 곳', value: busBoardingText(step) },
+      { label: '방면', value: busDirectionText(step) },
+      { label: '내릴 때', value: busAlightCueText(step) },
+    ]
+  }
+  return [
+    { label: '방면', value: normalizeDirectionText(step.way) || '행선지 안내판 확인' },
+    { label: '하차 후', value: subwayExitText(step) },
+    { label: '칸 위치', value: subwayDoorText(step) },
+  ]
+}
+
 export default function Route_() {
   const navigate = useNavigate()
   const { state } = useLocation()
@@ -687,36 +773,50 @@ export default function Route_() {
   const guideSteps = fullRouteSteps.map((step, index) => {
     if (step.type === 'walk') {
       const walkText = getWalkText(step, index, fullRouteSteps)
+      const walkDetail = walkInstructionText(step)
+      const tips = guideTipsForStep(step)
       return {
         icon: '🚶',
         title: walkText.title,
-        body: walkText.detail,
+        body: walkDetail ? `${walkText.detail} ${walkDetail}하세요.` : walkText.detail,
         meta: walkText.meta,
-        detail: '지도 점선과 목적지 표식을 보면서 천천히 이동하세요.',
-        speak: `${index + 1}단계. ${walkText.title}. ${walkText.meta || ''}. ${walkText.detail}`,
+        detail: step.routeSource === 'walking-route'
+          ? '지도 위 파란 보행 경로를 먼저 보고, 횡단보도와 보행로를 따라 천천히 이동하세요.'
+          : '지도 선과 목적지 표식을 보면서 천천히 이동하세요.',
+        tips,
+        speak: `${index + 1}단계. ${walkText.title}. ${walkText.meta || ''}. ${walkText.detail} ${walkDetail || ''}`,
       }
     }
     if (step.type === 'bus') {
       const buses = busLineText(step.lines)
       const meta = [step.sectionTime ? `${step.sectionTime}분` : '', step.stationCount ? `${step.stationCount}정류장` : ''].filter(Boolean).join(', ')
       const stopText = summarizeStops(step.passStops)
+      const direction = busDirectionText(step)
+      const boarding = busBoardingText(step)
+      const alight = busAlightText(step)
+      const tips = guideTipsForStep(step)
       return {
         icon: '🚌',
         title: `${buses || '버스'} 타기`,
-        body: `${step.startStationName || step.startName || '승차 정류장'} 정류장에서 타고 ${step.endName || '도착 정류장'} 정류장에서 내리세요.${stopText ? ` 중간에 ${stopText}를 지나요.` : ''}`,
+        body: `${boarding} 정류장에서 ${direction}을 확인하고 타세요. ${alight}에서 내리세요.${stopText ? ` 중간에 ${stopText}를 지나요.` : ''}`,
         meta,
-        speak: `${index + 1}단계. ${buses || '버스'}를 탑니다. ${step.startStationName || step.startName || '승차 정류장'} 정류장에서 타고 ${step.endName || '도착 정류장'} 정류장에서 내리세요. ${meta}`,
+        tips,
+        speak: `${index + 1}단계. ${buses || '버스'}를 탑니다. ${boarding} 정류장에서 ${direction}을 확인하고 타세요. ${alight}에서 내리세요. ${meta}`,
       }
     }
     const rails = lineText(step.lines)
     const meta = [step.sectionTime ? `${step.sectionTime}분` : '', step.stationCount ? `${step.stationCount}개 역` : ''].filter(Boolean).join(', ')
     const stopText = summarizeStops(step.passStops)
+    const direction = normalizeDirectionText(step.way)
+    const exitInstruction = subwayExitInstructionText(step)
+    const tips = guideTipsForStep(step)
     return {
       icon: '🚇',
       title: `${rails || '지하철'} 타기`,
-      body: `${step.startName || '출발역'}에서 ${step.way ? `${step.way} 방면으로 ` : ''}타고 ${step.endName || '도착역'}에서 내리세요.${stopText ? ` 중간에 ${stopText}를 지나요.` : ''}`,
+      body: `${step.startName || '출발역'}에서 ${direction ? `${direction}으로 ` : '행선지 안내판을 확인하고 '}타고 ${step.endName || '도착역'}에서 내리세요. 하차 후 ${exitInstruction}.${stopText ? ` 중간에 ${stopText}를 지나요.` : ''}`,
       meta,
-      speak: `${index + 1}단계. ${rails || '지하철'}을 탑니다. ${step.startName || '출발역'}에서 ${step.way ? `${step.way} 방면으로 ` : ''}타고 ${step.endName || '도착역'}에서 내리세요. ${meta}`,
+      tips,
+      speak: `${index + 1}단계. ${rails || '지하철'}을 탑니다. ${step.startName || '출발역'}에서 ${direction || '행선지 안내판'}을 확인하고 타세요. ${step.endName || '도착역'}에서 내려 ${exitInstruction}. ${meta}`,
     }
   })
   const activeGuideIndex = Math.min(currentGuideStep, Math.max(guideSteps.length - 1, 0))
@@ -1068,6 +1168,16 @@ export default function Route_() {
                       <p style={{ fontSize: 16, fontWeight: 750, color: '#E2E8F0', lineHeight: 1.45, margin: 0 }}>{activeGuide.body}</p>
                     </div>
                   </div>
+                  {activeGuide.tips?.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(128px, 1fr))', gap: 8, marginTop: 14 }}>
+                      {activeGuide.tips.map((tip, index) => (
+                        <div key={`${tip.label}-${index}`} style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.16)', borderRadius: 13, padding: '9px 10px', minWidth: 0 }}>
+                          <p style={{ fontSize: 11, fontWeight: 950, color: '#99F6E4', margin: '0 0 4px' }}>{tip.label}</p>
+                          <p style={{ fontSize: 13, fontWeight: 900, color: '#fff', margin: 0, lineHeight: 1.35 }}>{tip.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 8, marginTop: 14 }}>
                     <button onClick={() => setCurrentGuideStep(step => Math.max(0, step - 1))} disabled={activeGuideIndex === 0} style={{ minHeight: 48, borderRadius: 14, border: '1px solid rgba(255,255,255,0.18)', background: activeGuideIndex === 0 ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.14)', color: '#fff', fontSize: 14, fontWeight: 950, padding: '0 13px', cursor: activeGuideIndex === 0 ? 'default' : 'pointer', opacity: activeGuideIndex === 0 ? 0.45 : 1 }}>
                       이전
@@ -1147,6 +1257,12 @@ export default function Route_() {
                             {walkText.meta && <span style={{ fontSize: 12, color: '#64748B', marginLeft: 'auto', fontWeight: 800 }}>{walkText.meta}</span>}
                           </div>
                           <p style={{ fontSize: 13, color: '#64748B', margin: 0, lineHeight: 1.45 }}>{walkText.detail}</p>
+                          {walkInstructionText(step) && (
+                            <div style={{ marginTop: 9, background: '#EFF6FF', border: '1px solid #DBEAFE', borderRadius: 10, padding: '8px 10px' }}>
+                              <p style={{ fontSize: 11, color: '#2563EB', fontWeight: 950, margin: '0 0 3px' }}>보행 포인트</p>
+                              <p style={{ fontSize: 12, color: '#1E3A8A', fontWeight: 850, margin: 0, lineHeight: 1.45 }}>{walkInstructionText(step, 3)}</p>
+                            </div>
+                          )}
                         </div>
                       ) : step.type === 'bus' ? (
                         <div style={{ background: '#F8F9FA', borderRadius: 14, padding: '13px 14px', border: '1px solid #E2E8F0' }}>
@@ -1169,6 +1285,18 @@ export default function Route_() {
                             <span style={{ fontWeight: 700, color: '#059669' }}>{step.startStationName || step.startName}</span>
                             {' '} 승차 → <span style={{ fontWeight: 700 }}>{step.endName}</span> 하차
                           </p>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(118px, 1fr))', gap: 7, marginTop: 9 }}>
+                            {[
+                              { label: '타는 곳', value: busBoardingText(step) },
+                              { label: '방면 확인', value: busDirectionText(step) },
+                              { label: '내릴 때', value: busAlightCueText(step) },
+                            ].map(item => (
+                              <div key={item.label} style={{ background: '#fff', border: '1px solid #D1FAE5', borderRadius: 10, padding: '8px 9px', minWidth: 0 }}>
+                                <p style={{ fontSize: 10, color: '#059669', fontWeight: 950, margin: '0 0 3px' }}>{item.label}</p>
+                                <p style={{ fontSize: 12, color: '#064E3B', fontWeight: 900, margin: 0, lineHeight: 1.35 }}>{item.value}</p>
+                              </div>
+                            ))}
+                          </div>
                           {summarizeStops(step.passStops) && (
                             <div style={{ marginTop: 9, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: '9px 10px' }}>
                               <p style={{ fontSize: 11, color: '#64748B', fontWeight: 900, margin: '0 0 4px' }}>지나는 정류장</p>
@@ -1203,7 +1331,7 @@ export default function Route_() {
                             <span style={{ fontSize: 16 }}>🚇</span>
                             <span style={{ fontSize: 15, fontWeight: 900, color: '#0F172A' }}>지하철 탑승</span>
                             <span style={{ fontSize: 12, color: '#94A3B8', marginLeft: 'auto', fontWeight: 800 }}>
-                              {step.sectionTime ? `${step.sectionTime}분` : step.fallbackExit || ''}{step.stationCount ? ` · ${step.stationCount}정류장` : ''}
+                              {step.sectionTime ? `${step.sectionTime}분` : step.fallbackExit || ''}{step.stationCount ? ` · ${step.stationCount}개 역` : ''}
                             </span>
                           </div>
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -1215,9 +1343,21 @@ export default function Route_() {
                           </div>
                           <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>
                             <span style={{ fontWeight: 700, color: '#2563EB' }}>{step.startName}</span>
-                            {step.way && <span style={{ color: '#94A3B8' }}> ({step.way} 방면)</span>}
+                            {step.way && <span style={{ color: '#94A3B8' }}> ({normalizeDirectionText(step.way)})</span>}
                             {' '} → <span style={{ fontWeight: 700 }}>{step.endName}</span>
                           </p>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(118px, 1fr))', gap: 7, marginTop: 9 }}>
+                            {[
+                              { label: '방면', value: normalizeDirectionText(step.way) || '행선지 안내판 확인' },
+                              { label: '하차 후', value: subwayExitText(step) },
+                              { label: '칸 위치', value: subwayDoorText(step) },
+                            ].map(item => (
+                              <div key={item.label} style={{ background: '#fff', border: '1px solid #DBEAFE', borderRadius: 10, padding: '8px 9px', minWidth: 0 }}>
+                                <p style={{ fontSize: 10, color: '#2563EB', fontWeight: 950, margin: '0 0 3px' }}>{item.label}</p>
+                                <p style={{ fontSize: 12, color: '#1E3A8A', fontWeight: 900, margin: 0, lineHeight: 1.35 }}>{item.value}</p>
+                              </div>
+                            ))}
+                          </div>
                           {summarizeStops(step.passStops) && (
                             <div style={{ marginTop: 9, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, padding: '9px 10px' }}>
                               <p style={{ fontSize: 11, color: '#64748B', fontWeight: 900, margin: '0 0 4px' }}>지나는 역</p>

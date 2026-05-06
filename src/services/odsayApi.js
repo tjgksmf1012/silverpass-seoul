@@ -29,6 +29,14 @@ function asArray(value) {
   return Array.isArray(value) ? value : [value]
 }
 
+function cleanText(...values) {
+  for (const value of values) {
+    const text = String(value ?? '').trim()
+    if (text && text !== 'null' && text !== 'undefined' && text !== '-') return text
+  }
+  return ''
+}
+
 function numberOrNull(value) {
   const num = Number(value)
   return Number.isFinite(num) ? num : null
@@ -43,6 +51,13 @@ function pointFromLngLat(lng, lat) {
 
 function subPathPoint(s, prefix) {
   return pointFromLngLat(s?.[`${prefix}X`], s?.[`${prefix}Y`])
+}
+
+function exitPoint(s, prefix) {
+  return pointFromLngLat(
+    s?.[`${prefix}ExitX`] ?? s?.[`${prefix}ExitLng`] ?? s?.[`${prefix}ExitLon`],
+    s?.[`${prefix}ExitY`] ?? s?.[`${prefix}ExitLat`],
+  )
 }
 
 function stationPoint(station) {
@@ -73,6 +88,30 @@ function namedStationPoints(stations) {
       }
     })
     .filter(Boolean)
+}
+
+function stationNames(stations) {
+  return stations.map(station => cleanText(station.stationName, station.name)).filter(Boolean)
+}
+
+function exitNumber(s, prefix) {
+  return cleanText(
+    s?.[`${prefix}ExitNo`],
+    s?.[`${prefix}ExitNum`],
+    s?.[`${prefix}Exit`],
+    s?.[`${prefix}ExitName`],
+  ).replace(/번\s*출구$/, '')
+}
+
+function stopId(station, ...fallbacks) {
+  return cleanText(
+    station?.arsID,
+    station?.arsId,
+    station?.arsNo,
+    station?.localStationID,
+    station?.stationID,
+    ...fallbacks,
+  )
 }
 
 // ─── 경로 탐색 ────────────────────────────────────────────────────────────────
@@ -137,12 +176,18 @@ function parsePath(path) {
         const distance = s.distance || 0
         const startPoint = subPathPoint(s, 'start')
         const endPoint = subPathPoint(s, 'end')
+        const startExitNo = exitNumber(s, 'start')
+        const endExitNo = exitNumber(s, 'end')
         return {
           type: 'walk',
           distance,
           sectionTime: s.sectionTime || Math.max(1, Math.ceil(distance / 65)),
           startName: s.startName || '',
           endName: s.endName || '',
+          startExitNo,
+          endExitNo,
+          startExitPoint: exitPoint(s, 'start'),
+          endExitPoint: exitPoint(s, 'end'),
           startPoint,
           endPoint,
           routePoints: compactPoints([startPoint, endPoint]),
@@ -154,24 +199,49 @@ function parsePath(path) {
         // 버스
         const lanes = asArray(s.lane)
         const stations = asArray(s.passStopList?.stations)
+        const passStops = stationNames(stations)
         const passStopPoints = namedStationPoints(stations)
         const startPoint = subPathPoint(s, 'start')
         const endPoint = subPathPoint(s, 'end')
+        const boardingStation = stations[0] || {}
+        const alightingStation = stations[stations.length - 1] || {}
+        const lineDirection = cleanText(...lanes.flatMap(l => [
+          l.direction,
+          l.busDirection,
+          l.routeDirection,
+          l.endPoint,
+        ]))
+        const direction = cleanText(
+          s.way,
+          s.direction,
+          s.busDirection,
+          lineDirection,
+          alightingStation.stationName,
+          s.endName,
+        )
+        const beforeEndStopName = passStops.length >= 2 ? passStops[passStops.length - 2] : ''
         return {
           type: 'bus',
           lines: lanes.map(l => ({
             busNo: l.busNo,
             busId: l.busID,
             typeLabel: BUS_TYPE_LABEL[l.type] || '버스',
+            direction: cleanText(l.direction, l.busDirection, l.routeDirection, l.endPoint),
             isLowFloor: false, // ODsay에서 직접 제공 안 함
           })),
           startName: s.startName || '',
           endName: s.endName || '',
+          direction,
           stationCount: s.stationCount || 0,
           sectionTime: s.sectionTime || 0,
-          startStationId: stations[0]?.stationID || null,
-          startStationName: stations[0]?.stationName || s.startName || '',
-          passStops: stations.map(station => station.stationName).filter(Boolean),
+          startStationId: boardingStation.stationID || null,
+          endStationId: alightingStation.stationID || null,
+          startStopNo: stopId(boardingStation, s.startStationID, s.startStationId),
+          endStopNo: stopId(alightingStation, s.endStationID, s.endStationId),
+          startStationName: boardingStation.stationName || s.startName || '',
+          endStationName: alightingStation.stationName || s.endName || '',
+          beforeEndStopName,
+          passStops,
           passStopPoints,
           startPoint,
           endPoint,
@@ -182,9 +252,14 @@ function parsePath(path) {
         // 지하철
         const lanes = asArray(s.lane)
         const stations = asArray(s.passStopList?.stations)
+        const passStops = stationNames(stations)
         const passStopPoints = namedStationPoints(stations)
         const startPoint = subPathPoint(s, 'start')
         const endPoint = subPathPoint(s, 'end')
+        const startExitNo = exitNumber(s, 'start')
+        const endExitNo = exitNumber(s, 'end')
+        const direction = cleanText(s.way, s.direction)
+        const door = cleanText(s.door, s.fastDoor, s.doorNo, s.exitDoor)
         return {
           type: 'subway',
           lines: lanes.map(l => ({
@@ -196,9 +271,14 @@ function parsePath(path) {
           endName: s.endName || '',
           stationCount: s.stationCount || 0,
           sectionTime: s.sectionTime || 0,
-          way: s.way || '',
+          way: direction,
           wayCode: s.wayCode,
-          passStops: stations.map(station => station.stationName).filter(Boolean),
+          startExitNo,
+          endExitNo,
+          startExitPoint: exitPoint(s, 'start'),
+          endExitPoint: exitPoint(s, 'end'),
+          door,
+          passStops,
           passStopPoints,
           startPoint,
           endPoint,

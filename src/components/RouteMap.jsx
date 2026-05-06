@@ -350,8 +350,8 @@ function stepEndpointText(step) {
   const start = step.startStationName || step.startName || (step.type === 'walk' ? '출발지' : '타는 곳')
   const end = step.endName || (step.type === 'walk' ? '다음 지점' : '내릴 곳')
   if (step.type === 'walk') return `${start}에서 ${end}까지 걸어요.`
-  if (step.type === 'bus') return `${start}에서 타고 ${end}에서 내리세요.`
-  return `${start}에서 ${step.way ? `${step.way} 방면으로 ` : ''}타고 ${end}에서 내리세요.`
+  if (step.type === 'bus') return `${start}에서 ${busDirectionText(step)}을 확인하고 타서 ${end}에서 내리세요.`
+  return `${start}에서 ${normalizeDirectionText(step.way) ? `${normalizeDirectionText(step.way)}으로 ` : ''}타고 ${end}에서 내리세요.`
 }
 
 function stepActionTitle(step) {
@@ -369,6 +369,33 @@ function stepStopPreview(step) {
   const label = step.type === 'subway' ? '지나는 역' : '지나는 정류장'
   const preview = stops.slice(0, 5).join(' → ')
   return stops.length > 5 ? `${label}: ${preview} 외 ${stops.length - 5}곳` : `${label}: ${preview}`
+}
+
+function normalizeDirectionText(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  if (/방면$|행$/.test(text)) return text
+  return `${text} 방면`
+}
+
+function busDirectionText(step) {
+  return normalizeDirectionText(
+    step?.direction ||
+    step?.lines?.find(line => line.direction)?.direction ||
+    step?.endStationName ||
+    step?.endName,
+  ) || '버스 전면 행선지'
+}
+
+function subwayExitText(step) {
+  const exit = String(step?.endExitNo || step?.fallbackExit || '').trim().replace(/번\s*출구$/, '')
+  if (exit) return `${exit}번 출구`
+  return '출구·승강기 안내판'
+}
+
+function subwayDoorText(step) {
+  const door = String(step?.door || '').trim()
+  return door ? `${door} 근처` : '승강기 표지 가까운 칸'
 }
 
 function stepInstructionItems(step, direction, nextStep) {
@@ -391,16 +418,22 @@ function stepInstructionItems(step, direction, nextStep) {
   }
   if (step.type === 'bus') {
     const busText = routeStepLabel(step)
+    const directionText = busDirectionText(step)
+    const alightCue = step.beforeEndStopName && step.beforeEndStopName !== end
+      ? `${step.beforeEndStopName} 다음 정류장`
+      : `${end} 안내 방송/전광판`
     return [
-      `${start} 정류장에서 ${busText} 확인`,
-      step.stationCount ? `${step.stationCount}정류장 이동 후 하차` : `${end}에서 하차`,
-      `${end} 표식이 보이면 내릴 준비`,
+      `${start} 정류장에서 ${busText} · ${directionText} 확인`,
+      step.stationCount ? `${step.stationCount}정류장 이동 후 ${end} 하차` : `${end}에서 하차`,
+      `${alightCue}에서 내릴 준비`,
     ]
   }
+  const subwayDirection = normalizeDirectionText(step.way)
   return [
-    `${start}에서 ${step.way ? `${step.way} 방면 ` : ''}${routeStepLabel(step)} 탑승`,
+    `${start}에서 ${subwayDirection ? `${subwayDirection} ` : ''}${routeStepLabel(step)} 탑승`,
     step.stationCount ? `${step.stationCount}개 역 이동` : `${end}까지 이동`,
-    `${end}에서 하차 후 출구·승강기 안내 확인`,
+    `${end}에서 하차 후 ${subwayExitText(step)} 확인`,
+    `${subwayDoorText(step)}을 미리 확인하면 이동이 편해요`,
   ]
 }
 

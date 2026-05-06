@@ -136,6 +136,7 @@ export async function enhanceRouteWalkingGeometry(route, routeStart, routeEnd) {
       routeSource: 'walking-route',
       walkingDistance: walkingRoute.distance,
       walkingDuration: walkingRoute.duration,
+      walkInstructions: walkingRoute.steps,
     }
   }))
 
