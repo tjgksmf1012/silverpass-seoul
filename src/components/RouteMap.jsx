@@ -42,13 +42,21 @@ function pointOverlayHtml(name, color) {
 }
 
 function drawRouteGuideLine(kakao, map, path, source) {
+  const styles = {
+    walk: { color: '#2563EB', weight: 4, opacity: 0.72, style: 'shortdash' },
+    bus: { color: '#059669', weight: 5, opacity: 0.72, style: 'solid' },
+    subway: { color: '#7C3AED', weight: 5, opacity: 0.72, style: 'solid' },
+    flow: { color: '#0D9488', weight: 4, opacity: 0.62, style: 'shortdash' },
+    guide: { color: '#64748B', weight: 3, opacity: 0.5, style: 'shortdash' },
+  }
+  const style = styles[source] || styles.guide
   return new kakao.maps.Polyline({
     map,
     path,
-    strokeWeight: source === 'flow' ? 4 : 3,
-    strokeColor: source === 'flow' ? '#0D9488' : '#64748B',
-    strokeOpacity: source === 'flow' ? 0.62 : 0.5,
-    strokeStyle: 'shortdash',
+    strokeWeight: style.weight,
+    strokeColor: style.color,
+    strokeOpacity: style.opacity,
+    strokeStyle: style.style,
   })
 }
 
@@ -103,6 +111,28 @@ function createRouteGuidePath(kakao, basePoints, routeGuide) {
   }
 }
 
+function createRouteGuideSegments(kakao, basePoints, routeGuide, routeMode) {
+  if (routeMode === 'walk') {
+    return [{
+      source: 'walk',
+      path: createDirectGuidePath(kakao, basePoints),
+    }]
+  }
+
+  const stepSegments = (routeGuide?.steps || []).flatMap(step => {
+    const points = compactRoutePoints(step.routePoints?.length ? step.routePoints : [step.startPoint, step.endPoint])
+    if (points.length < 2) return []
+    return [{
+      source: step.type === 'bus' ? 'bus' : step.type === 'subway' ? 'subway' : 'walk',
+      path: points.map(point => toLatLng(kakao, point)),
+    }]
+  })
+  if (stepSegments.length) return stepSegments
+
+  const { path, source } = createRouteGuidePath(kakao, basePoints, routeGuide)
+  return path.length >= 2 ? [{ path, source }] : []
+}
+
 function getRouteDistance(points) {
   const R = 6371000
   const toRad = d => d * Math.PI / 180
@@ -134,11 +164,11 @@ function isInSeoul(lat, lng) {
     lng <= SEOUL_BOUNDS.maxLng
 }
 
-export default function RouteMap({ destination, searchKeyword, placeCoords, startPlace, viaPlace, routeGuide, onCoordsReady }) {
+export default function RouteMap({ destination, searchKeyword, placeCoords, startPlace, viaPlace, routeGuide, routeMode = 'guide', onCoordsReady }) {
   const mapDivRef   = useRef(null)
   const mapRef      = useRef(null)
   const overlayRef  = useRef([])
-  const polylineRef = useRef(null)
+  const polylineRef = useRef([])
   const [status, setStatus]     = useState('loading')
   const [distInfo, setDistInfo] = useState(null)
   const [locationNote, setLocationNote] = useState('')
@@ -188,7 +218,8 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
         if (mapRef.current) {
           overlayRef.current.forEach(o => o.setMap(null))
           overlayRef.current = []
-          if (polylineRef.current) { polylineRef.current.setMap(null); polylineRef.current = null }
+          polylineRef.current.forEach(line => { try { line.setMap(null) } catch {} })
+          polylineRef.current = []
           mapRef.current = null
           mapDivRef.current.innerHTML = ''
         }
@@ -244,13 +275,17 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
               ...(viaPlace?.lat && viaPlace?.lng ? [{ lat: viaPlace.lat, lng: viaPlace.lng }] : []),
               { lat: destLat, lng: destLng },
             ]
-            const { path: linePath, source: lineSource } = createRouteGuidePath(kakao, basePoints, routeGuide)
-            if (linePath.length >= 2) {
-              polylineRef.current = drawRouteGuideLine(kakao, map, linePath, lineSource)
-            }
+            const segments = createRouteGuideSegments(kakao, basePoints, routeGuide, routeMode)
+            segments.forEach(segment => {
+              if (segment.path.length >= 2) {
+                polylineRef.current.push(drawRouteGuideLine(kakao, map, segment.path, segment.source))
+              }
+            })
 
             const bounds = new kakao.maps.LatLngBounds()
-            const boundsPath = linePath.length ? linePath : [startLatLng, destLatLng]
+            const boundsPath = segments.length
+              ? segments.flatMap(segment => segment.path)
+              : [startLatLng, destLatLng]
             boundsPath.forEach(point => bounds.extend(point))
             map.setBounds(bounds, 60, 60, 60, 60)
 
@@ -258,9 +293,11 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
             const duration = estimateDuration(dist)
 
             setDistInfo({ dist, duration })
-            setLocationNote(lineSource === 'flow'
-              ? '지도 선은 실제 도로 선형이 아니라 출발·환승·도착 흐름만 간단히 이어 보여요. 정확한 순서는 위 전체 경로를 따르세요.'
-              : '지도 선은 직선 기준 참고선이에요. 정확한 순서는 위 전체 경로를 따르세요.'
+            setLocationNote(routeMode === 'walk'
+              ? '가까운 거리는 도보 중심으로 안내해요. 파란 점선은 도보 방향 참고선이고, 정확한 골목 안내는 카카오맵 도보 안내를 함께 확인하세요.'
+              : routeGuide?.steps?.length
+                ? '공공데이터로 확인한 조건을 함께 반영해 도보·버스·지하철 구간별로 표시해요. 도보 골목길은 카카오맵 안내를 함께 확인하세요.'
+                : '지도 선은 직선 기준 참고선이에요. 정확한 순서는 위 전체 경로를 따르세요.'
             )
             onCoordsReady?.({
               user: { lat: start.lat, lng: start.lng },
@@ -322,9 +359,10 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
       cancelled = true
       overlayRef.current.forEach(o => { try { o.setMap(null) } catch {} })
       overlayRef.current = []
-      if (polylineRef.current) { try { polylineRef.current.setMap(null) } catch {} polylineRef.current = null }
+      polylineRef.current.forEach(line => { try { line.setMap(null) } catch {} })
+      polylineRef.current = []
     }
-  }, [destination, searchKeyword, placeCoords, startPlace, viaPlace, routeGuide])
+  }, [destination, searchKeyword, placeCoords, startPlace, viaPlace, routeGuide, routeMode])
 
   const routeDistance = Number(routeGuide?.totalDistance) > 0 ? Number(routeGuide.totalDistance) : distInfo?.dist
   const routeDuration = Number(routeGuide?.totalTime) > 0 ? Number(routeGuide.totalTime) : distInfo?.duration
@@ -431,6 +469,22 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
       </div>
 
       <div style={{ padding: '8px 14px', borderTop: '1px solid #F8FAFC' }}>
+        {(routeMode === 'walk' || routeGuide?.steps?.length) && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+            {(routeMode === 'walk'
+              ? [{ label: '도보', color: '#2563EB', dash: true }]
+              : [
+                { label: '도보', color: '#2563EB', dash: true },
+                { label: '버스', color: '#059669' },
+                { label: '지하철', color: '#7C3AED' },
+              ]).map(item => (
+              <span key={item.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 800, color: '#64748B' }}>
+                <span style={{ width: 18, height: 0, borderTop: `3px ${item.dash ? 'dashed' : 'solid'} ${item.color}`, borderRadius: 2 }} />
+                {item.label}
+              </span>
+            ))}
+          </div>
+        )}
         <p style={{ fontSize: 11, color: locationNote ? '#94A3B8' : '#CBD5E1', margin: 0 }}>
           {locationNote || '지도 © Kakao'}
         </p>
