@@ -144,7 +144,7 @@ export default function GuardianDashboard() {
     const link = `${window.location.origin}/invite/${inviteCode}`
     try {
       if (navigator.share) {
-        await navigator.share({ title: '실버패스 서울 초대', text: '어르신, 이 링크로 접속해 주세요!', url: link })
+        await navigator.share({ title: '실버패스 서울 연결', text: '이 링크로 들어오면 보호자와 연결돼요.', url: link })
       } else {
         await navigator.clipboard.writeText(link)
         setCopied(true)
@@ -178,7 +178,7 @@ export default function GuardianDashboard() {
     const link = `${window.location.origin}/invite/${reloginCode}`
     try {
       if (navigator.share) {
-        await navigator.share({ title: '실버패스 서울 재로그인', text: `${linkedUser.name}님, 이 링크로 다시 접속해 주세요!`, url: link })
+        await navigator.share({ title: '실버패스 서울 다시 접속', text: `${linkedUser.name}님, 이 링크로 실버패스에 다시 들어와 주세요.`, url: link })
       } else {
         await navigator.clipboard.writeText(link)
         setReloginCopied(true)
@@ -287,23 +287,23 @@ export default function GuardianDashboard() {
                   onClick={openInfoEditor}
                   className="flex items-center justify-center gap-2 bg-brand-50 text-brand-700 font-semibold rounded-2xl py-3 active:scale-95 transition-all"
                 >
-                  <span className="text-lg">✏️</span> 정보 수정
+                  <span className="text-lg">✏️</span> 어르신 정보 수정
                 </button>
                 <button
                   onClick={loadLinkedUser}
                   className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 font-semibold rounded-2xl py-3 active:scale-95 transition-all"
                 >
-                  <span className="text-lg">🔄</span> 새로고침
+                  <span className="text-lg">🔄</span> 다시 불러오기
                 </button>
               </div>
 
-              {/* 재로그인 */}
+              {/* 다시 접속 */}
               <div className="mt-4 pt-4 border-t border-gray-100">
-                <p className="text-xs text-gray-400 mb-2">어르신 기기에서 로그인이 풀렸나요?</p>
+                <p className="text-xs text-gray-400 mb-2">어르신 휴대폰에서 다시 들어가야 하나요?</p>
                 {reloginCode ? (
                   <div className="space-y-2">
                     <div className="bg-amber-50 rounded-2xl p-3 text-center">
-                      <p className="text-xs text-amber-600 mb-1">재로그인 코드 (1회용)</p>
+                      <p className="text-xs text-amber-600 mb-1">다시 접속 코드</p>
                       <p className="text-2xl font-mono font-bold text-amber-700 tracking-widest">{reloginCode}</p>
                     </div>
                     <button
@@ -311,7 +311,7 @@ export default function GuardianDashboard() {
                       className="w-full py-3 rounded-2xl bg-amber-500 text-white font-semibold text-sm active:scale-95 transition-all flex items-center justify-center gap-2"
                     >
                       <span>{reloginCopied ? '✅' : '📤'}</span>
-                      {reloginCopied ? '링크 복사됐어요!' : '재로그인 링크 공유'}
+                      {reloginCopied ? '링크 복사됐어요!' : '다시 접속 링크 공유'}
                     </button>
                     <button onClick={() => setReloginCode('')} className="w-full text-xs text-gray-400 py-1">
                       닫기
@@ -323,7 +323,7 @@ export default function GuardianDashboard() {
                     disabled={reloginLoading}
                     className="w-full py-3 rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 font-semibold text-sm active:scale-95 transition-all disabled:opacity-50"
                   >
-                    {reloginLoading ? '생성 중...' : '🔑 재로그인 링크 만들기'}
+                    {reloginLoading ? '만드는 중...' : '🔑 다시 접속 링크 만들기'}
                   </button>
                 )}
               </div>
@@ -367,7 +367,7 @@ export default function GuardianDashboard() {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <div>
-                        <label className="text-xs font-semibold text-gray-500 block">바로 출발 목적지</label>
+                        <label className="text-xs font-semibold text-gray-500 block">홈 바로 출발 버튼</label>
                         <p className="text-xs text-gray-400 mt-0.5">어르신 홈 화면의 큰 바로 출발 카드에 보여요</p>
                       </div>
                       <button
@@ -404,7 +404,7 @@ export default function GuardianDashboard() {
                                 fav.showOnHome ? 'bg-brand-600 text-white' : 'bg-white text-gray-400 border border-gray-200'
                               }`}
                             >
-                              {fav.showOnHome ? '홈 표시' : '숨김'}
+                              {fav.showOnHome ? '홈에 보임' : '숨김'}
                             </button>
                           </div>
                           <div className="flex gap-1.5">
@@ -444,7 +444,7 @@ export default function GuardianDashboard() {
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-gray-500 mb-1 block">보호자 전화번호</label>
+                    <label className="text-xs font-semibold text-gray-500 mb-1 block">어르신이 누를 보호자 번호</label>
                     <input
                       type="tel"
                       value={elderInfo.phone}
@@ -464,7 +464,7 @@ export default function GuardianDashboard() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-gray-500 mb-2 block">최대 도보 시간</label>
+                    <label className="text-xs font-semibold text-gray-500 mb-2 block">한 번에 걸어도 괜찮은 시간</label>
                     <div className="flex gap-2">
                       {[10, 15, 20, 30].map(min => (
                         <button key={min} type="button"
@@ -571,7 +571,7 @@ export default function GuardianDashboard() {
                         <InfoRow
                           key={fav.id}
                           icon={fav.icon}
-                          label={`${fav.name}${fav.showOnHome ? ' · 홈 표시' : ' · 숨김'}`}
+                          label={`${fav.name}${fav.showOnHome ? ' · 홈에 보임' : ' · 숨김'}`}
                           value={fav.address}
                         />
                       ))}
@@ -625,13 +625,13 @@ export default function GuardianDashboard() {
             </div>
           </>
         ) : (
-          /* 연결 안 된 상태 - 초대 코드 생성 */
+          /* 연결 안 된 상태 - 연결 코드 생성 */
           <div className="bg-white rounded-3xl p-6 shadow-sm">
             <div className="text-center mb-6">
               <p className="text-5xl mb-3">📨</p>
-              <h2 className="text-xl font-bold text-gray-900">어르신을 초대하세요</h2>
+              <h2 className="text-xl font-bold text-gray-900">어르신 연결하기</h2>
               <p className="text-gray-500 text-senior mt-2 leading-relaxed">
-                초대 링크를 만들어서<br />어르신께 카카오톡으로 보내드리세요
+                연결 링크를 만들어서<br />어르신 휴대폰으로 보내주세요
               </p>
             </div>
 
@@ -651,7 +651,7 @@ export default function GuardianDashboard() {
             {inviteCode ? (
               <div className="space-y-3">
                 <div className="bg-brand-50 rounded-2xl p-4 text-center">
-                  <p className="text-xs text-brand-600 mb-1">초대 코드</p>
+                  <p className="text-xs text-brand-600 mb-1">연결 코드</p>
                   <p className="text-3xl font-mono font-bold text-brand-700 tracking-widest">{inviteCode}</p>
                 </div>
 
@@ -660,7 +660,7 @@ export default function GuardianDashboard() {
                   className="w-full btn-primary py-4 text-lg rounded-2xl flex items-center justify-center gap-2"
                 >
                   <span>{copied ? '✅' : '📤'}</span>
-                  {copied ? '링크 복사됐어요!' : '초대 링크 공유하기'}
+                  {copied ? '링크 복사됐어요!' : '연결 링크 공유하기'}
                 </button>
 
                 <button
@@ -676,7 +676,7 @@ export default function GuardianDashboard() {
                 disabled={inviteLoading || !elderName.trim()}
                 className="w-full btn-primary py-4 text-lg rounded-2xl disabled:opacity-40"
               >
-                {inviteLoading ? '생성 중...' : '초대 코드 만들기'}
+                {inviteLoading ? '만드는 중...' : '연결 코드 만들기'}
               </button>
             )}
           </div>
