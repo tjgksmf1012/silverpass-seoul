@@ -1334,20 +1334,12 @@ export default function Route_() {
                   </div>
                 </div>
               </a>
-              <a href="kakaomap://taxi" style={{ textDecoration: 'none' }}>
-                <div style={{ background: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: 14, padding: '16px', display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 14, background: '#FEE500', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <span style={{ fontSize: 24 }}>🚕</span>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', margin: 0 }}>카카오택시</p>
-                    <p style={{ fontSize: 12, color: '#92400E', margin: '3px 0 0' }}>앱에서 바로 호출하세요</p>
-                  </div>
-                  <div style={{ background: '#FEE500', borderRadius: 10, padding: '6px 12px' }}>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: '#000' }}>열기</span>
-                  </div>
-                </div>
-              </a>
+              <div style={{ background: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: 14, padding: '14px 16px' }}>
+                <p style={{ fontSize: 13, color: '#92400E', fontWeight: 900, margin: '0 0 5px' }}>공공 이동지원 우선</p>
+                <p style={{ fontSize: 13, color: '#78350F', fontWeight: 700, lineHeight: 1.5, margin: 0 }}>
+                  일반 택시 호출 앱 대신 서울시 어르신 콜택시와 대중교통 접근성 정보를 먼저 안내해요.
+                </p>
+              </div>
               <div style={{ background: '#F8F9FA', borderRadius: 12, padding: '14px' }}>
                 <p style={{ fontSize: 12, fontWeight: 700, color: '#64748B', margin: '0 0 10px' }}>택시 요금 안내</p>
                 <div style={{ display: 'flex' }}>
