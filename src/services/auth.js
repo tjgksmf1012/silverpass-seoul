@@ -348,7 +348,7 @@ export async function syncElderProfileFromSupabase(elderId) {
     } catch {}
   }
 
-  saveProfile({
+  const nextProfile = {
     ...local,
     ...(info.home_address  && { homeAddress: info.home_address, district: info.home_address.match(/(\S+구)/)?.[1] || '종로구' }),
     ...(info.district      && !info.home_address && { district: info.district }),
@@ -358,5 +358,18 @@ export async function syncElderProfileFromSupabase(elderId) {
     ...(info.phone         && { guardianPhone: info.phone }),
     ...(info.notes         && { healthNotes: info.notes }),
     ...(syncedFavorites    && { favorites: syncedFavorites }),
-  })
+  }
+
+  if (!nextProfile.guardianPhone) {
+    const { data: link } = await supabase
+      .from('links')
+      .select('guardian:profiles!links_guardian_id_fkey(name, phone)')
+      .eq('user_id', elderId)
+      .maybeSingle()
+
+    const guardian = Array.isArray(link?.guardian) ? link.guardian[0] : link?.guardian
+    if (guardian?.phone) nextProfile.guardianPhone = guardian.phone
+  }
+
+  saveProfile(nextProfile)
 }
