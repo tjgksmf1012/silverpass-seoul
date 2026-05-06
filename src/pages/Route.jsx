@@ -163,6 +163,39 @@ function getRouteCriteria(route, index, routes = [], profile = {}) {
   return { label: route.pathTypeLabel || '대안 경로', short: '대안', desc: '다른 이동 방식을 선택할 수 있는 경로', color: '#64748B' }
 }
 
+function kakaoPoint(name, point) {
+  const lat = Number(point?.lat)
+  const lng = Number(point?.lng)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  const label = encodeURIComponent(String(name || point?.name || '목적지').replace(/[/?#]/g, ' ').trim())
+  return `${label},${lat.toFixed(6)},${lng.toFixed(6)}`
+}
+
+function buildKakaoRouteUrl({ start, dest, via, by = 'traffic' }) {
+  const startPart = kakaoPoint(start?.name || '출발지', start)
+  const destPart = kakaoPoint(dest?.name || '목적지', dest)
+  if (!startPart || !destPart) return null
+  const viaPart = by !== 'traffic' ? kakaoPoint(via?.name || '경유지', via) : null
+  return `https://map.kakao.com/link/by/${by}/${[startPart, viaPart, destPart].filter(Boolean).join('/')}`
+}
+
+function buildKakaoMapUrl(place) {
+  const part = kakaoPoint(place?.name || '목적지', place)
+  return part ? `https://map.kakao.com/link/map/${part}` : null
+}
+
+function lineText(lines = []) {
+  return lines.map(line => line.busNo || line.name).filter(Boolean).join(', ')
+}
+
+function busLineText(lines = []) {
+  return lines.map(line => line.busNo ? `${line.busNo}번` : line.name).filter(Boolean).join(', ')
+}
+
+function hasPoint(point) {
+  return Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))
+}
+
 export default function Route_() {
   const navigate = useNavigate()
   const { state } = useLocation()
@@ -177,6 +210,7 @@ export default function Route_() {
   const [transitIssue, setTransitIssue]   = useState('')
   const [liveCoords, setLiveCoords]       = useState(null)
   const [selectedRoute, setSelectedRoute] = useState(0)     // 선택된 경로 인덱스
+  const [currentGuideStep, setCurrentGuideStep] = useState(0)
   const [healthNotes, setHealthNotes]     = useState('')
   const [manualStart, setManualStart]     = useState(() => normalizeRoutePoint(state?.startPlace || state?.parsed?.startPlace))
   const [viaPlace, setViaPlace]           = useState(() => normalizeRoutePoint(state?.viaPlace || state?.parsed?.viaPlace))
@@ -417,6 +451,10 @@ export default function Route_() {
     loadSelectedBusRealtime()
   }, [transitRoutes, selectedRoute])
 
+  useEffect(() => {
+    setCurrentGuideStep(0)
+  }, [selectedRoute, destination, manualStart?.lat, manualStart?.lng, viaPlace?.lat, viaPlace?.lng])
+
   if (!hasRouteRequest) return (
     <div style={{ minHeight: '100vh', background: '#F3F7FA', padding: '54px 20px 32px', display: 'flex', flexDirection: 'column' }}>
       <button onClick={() => navigate('/')} aria-label="홈으로 돌아가기" style={{ width: 48, height: 48, borderRadius: 14, border: '1.5px solid #CBD5E1', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, marginBottom: 28 }}>
@@ -586,6 +624,68 @@ export default function Route_() {
     return steps
   })()
   const fullRouteSteps = hasExactRoute ? bestRoute.steps : fallbackRouteSteps
+  const kakaoStart = liveCoords?.user
+    ? { ...liveCoords.user, name: startDisplay || '출발지' }
+    : (manualStart ? { ...manualStart, name: manualStart.name || '출발지' } : null)
+  const kakaoDest = liveCoords?.dest
+    ? { ...liveCoords.dest, name: destination }
+    : (placeCoords ? { ...placeCoords, name: destination } : null)
+  const kakaoTransitUrl = buildKakaoRouteUrl({ start: kakaoStart, dest: kakaoDest, by: 'traffic' })
+  const kakaoDestUrl = buildKakaoMapUrl(kakaoDest)
+  const kakaoPrimaryUrl = kakaoTransitUrl || kakaoDestUrl
+  const guideSteps = fullRouteSteps.map((step, index) => {
+    if (step.type === 'walk') {
+      const walkText = getWalkText(step, index, fullRouteSteps)
+      const walkStart = hasPoint(step.startPoint) ? { ...step.startPoint, name: index === 0 ? startDisplay : '도보 시작' } : null
+      const walkDest = hasPoint(step.endPoint) ? { ...step.endPoint, name: walkText.title.replace(/까지 걷기$/, '') || '도보 도착' } : null
+      const actionUrl = buildKakaoRouteUrl({ start: walkStart, dest: walkDest, by: 'walk' })
+      return {
+        icon: '🚶',
+        title: walkText.title,
+        body: walkText.detail,
+        meta: walkText.meta,
+        actionUrl,
+        actionLabel: '이 구간 도보 안내',
+        speak: `${index + 1}단계. ${walkText.title}. ${walkText.meta || ''}. ${walkText.detail}`,
+      }
+    }
+    if (step.type === 'bus') {
+      const buses = busLineText(step.lines)
+      const meta = [step.sectionTime ? `${step.sectionTime}분` : '', step.stationCount ? `${step.stationCount}정류장` : ''].filter(Boolean).join(', ')
+      return {
+        icon: '🚌',
+        title: `${buses || '버스'} 타기`,
+        body: `${step.startStationName || step.startName || '승차 정류장'} 정류장에서 타고 ${step.endName || '도착 정류장'} 정류장에서 내리세요.`,
+        meta,
+        actionUrl: null,
+        actionLabel: '',
+        speak: `${index + 1}단계. ${buses || '버스'}를 탑니다. ${step.startStationName || step.startName || '승차 정류장'} 정류장에서 타고 ${step.endName || '도착 정류장'} 정류장에서 내리세요. ${meta}`,
+      }
+    }
+    const rails = lineText(step.lines)
+    const meta = [step.sectionTime ? `${step.sectionTime}분` : '', step.stationCount ? `${step.stationCount}개 역` : ''].filter(Boolean).join(', ')
+    return {
+      icon: '🚇',
+      title: `${rails || '지하철'} 타기`,
+      body: `${step.startName || '출발역'}에서 ${step.way ? `${step.way} 방면으로 ` : ''}타고 ${step.endName || '도착역'}에서 내리세요.`,
+      meta,
+      actionUrl: null,
+      actionLabel: '',
+      speak: `${index + 1}단계. ${rails || '지하철'}을 탑니다. ${step.startName || '출발역'}에서 ${step.way ? `${step.way} 방면으로 ` : ''}타고 ${step.endName || '도착역'}에서 내리세요. ${meta}`,
+    }
+  })
+  const activeGuideIndex = Math.min(currentGuideStep, Math.max(guideSteps.length - 1, 0))
+  const activeGuide = guideSteps[activeGuideIndex]
+
+  function speakGuideStep(guide) {
+    if (!guide || typeof window === 'undefined' || !('speechSynthesis' in window)) return
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(guide.speak)
+    utterance.lang = 'ko-KR'
+    utterance.rate = 0.86
+    utterance.pitch = 0.95
+    window.speechSynthesis.speak(utterance)
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: '#F3F7FA', paddingBottom: 128 }}>
@@ -847,6 +947,69 @@ export default function Route_() {
                 ))}
               </div>
 
+              <div style={{ background: '#F0FDFA', border: '1.5px solid #99F6E4', borderRadius: 16, padding: 14, marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#0D9488', boxShadow: '0 0 0 4px #CCFBF1', flexShrink: 0 }} />
+                  <p style={{ fontSize: 15, fontWeight: 950, color: '#0F172A', margin: 0 }}>정확 안내 시작</p>
+                </div>
+                <p style={{ fontSize: 13, fontWeight: 750, color: '#0F766E', lineHeight: 1.5, margin: '0 0 12px' }}>
+                  정류장까지 걷는 길과 골목 방향은 카카오맵에서 자세히 안내받으세요. 아래 큰 글씨 안내는 함께 확인해요.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: kakaoPrimaryUrl && kakaoTransitUrl ? '1fr auto' : '1fr', gap: 8 }}>
+                  {kakaoPrimaryUrl ? (
+                    <a href={kakaoPrimaryUrl} target="_blank" rel="noreferrer" style={{ minHeight: 52, borderRadius: 14, background: '#0D9488', color: '#fff', textDecoration: 'none', fontSize: 17, fontWeight: 950, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 14px', textAlign: 'center' }}>
+                      {kakaoTransitUrl ? '카카오맵 길안내 열기' : '목적지 지도 열기'}
+                    </a>
+                  ) : (
+                    <div style={{ minHeight: 52, borderRadius: 14, background: '#E2E8F0', color: '#64748B', fontSize: 15, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 14px', textAlign: 'center' }}>
+                      출발지 확인 후 정확 안내 가능
+                    </div>
+                  )}
+                  {kakaoTransitUrl && kakaoDestUrl && (
+                    <a href={kakaoDestUrl} target="_blank" rel="noreferrer" style={{ minHeight: 52, borderRadius: 14, border: '1.5px solid #99F6E4', background: '#fff', color: '#0F766E', textDecoration: 'none', fontSize: 13, fontWeight: 950, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 12px', whiteSpace: 'nowrap' }}>
+                      위치 보기
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {activeGuide && (
+                <div style={{ background: '#0F172A', borderRadius: 18, padding: 16, marginBottom: 14, color: '#fff', boxShadow: '0 12px 28px rgba(15,23,42,0.20)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <p style={{ fontSize: 13, fontWeight: 950, color: '#99F6E4', margin: 0 }}>지금 따라가기</p>
+                    <span style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.16)', borderRadius: 20, padding: '4px 9px', fontSize: 12, fontWeight: 950 }}>
+                      {activeGuideIndex + 1} / {guideSteps.length}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                    <div style={{ width: 46, height: 46, borderRadius: 15, background: '#fff', color: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>
+                      {activeGuide.icon}
+                    </div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <h2 style={{ fontSize: 23, fontWeight: 950, lineHeight: 1.2, margin: '0 0 7px', letterSpacing: 0 }}>{activeGuide.title}</h2>
+                      {activeGuide.meta && <p style={{ fontSize: 14, fontWeight: 900, color: '#99F6E4', margin: '0 0 6px' }}>{activeGuide.meta}</p>}
+                      <p style={{ fontSize: 16, fontWeight: 750, color: '#E2E8F0', lineHeight: 1.45, margin: 0 }}>{activeGuide.body}</p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 8, marginTop: 14 }}>
+                    <button onClick={() => setCurrentGuideStep(step => Math.max(0, step - 1))} disabled={activeGuideIndex === 0} style={{ minHeight: 48, borderRadius: 14, border: '1px solid rgba(255,255,255,0.18)', background: activeGuideIndex === 0 ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.14)', color: '#fff', fontSize: 14, fontWeight: 950, padding: '0 13px', cursor: activeGuideIndex === 0 ? 'default' : 'pointer', opacity: activeGuideIndex === 0 ? 0.45 : 1 }}>
+                      이전
+                    </button>
+                    <button onClick={() => speakGuideStep(activeGuide)} style={{ minHeight: 48, borderRadius: 14, border: 'none', background: '#14B8A6', color: '#fff', fontSize: 15, fontWeight: 950, cursor: 'pointer' }}>
+                      음성으로 듣기
+                    </button>
+                    <button onClick={() => setCurrentGuideStep(step => Math.min(guideSteps.length - 1, step + 1))} disabled={activeGuideIndex >= guideSteps.length - 1} style={{ minHeight: 48, borderRadius: 14, border: '1px solid rgba(255,255,255,0.18)', background: activeGuideIndex >= guideSteps.length - 1 ? 'rgba(255,255,255,0.08)' : '#fff', color: activeGuideIndex >= guideSteps.length - 1 ? '#fff' : '#0F172A', fontSize: 14, fontWeight: 950, padding: '0 13px', cursor: activeGuideIndex >= guideSteps.length - 1 ? 'default' : 'pointer', opacity: activeGuideIndex >= guideSteps.length - 1 ? 0.45 : 1 }}>
+                      다음
+                    </button>
+                  </div>
+                  {activeGuide.actionUrl && (
+                    <a href={activeGuide.actionUrl} target="_blank" rel="noreferrer" style={{ marginTop: 8, minHeight: 46, borderRadius: 14, background: '#fff', color: '#0F766E', textDecoration: 'none', fontSize: 15, fontWeight: 950, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {activeGuide.actionLabel}
+                    </a>
+                  )}
+                </div>
+              )}
+
               {!hasExactRoute && (
                 <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 14, padding: '12px 14px', marginBottom: 14 }}>
                   <p style={{ fontSize: 14, color: '#9A3412', fontWeight: 900, margin: '0 0 4px' }}>{noExactTitle}</p>
@@ -865,6 +1028,7 @@ export default function Route_() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {fullRouteSteps.map((step, i) => {
                   const walkText = step.type === 'walk' ? getWalkText(step, i, fullRouteSteps) : null
+                  const stepGuide = guideSteps[i]
                   return (
                     <div key={`${step.type}-${i}`} style={{ display: 'grid', gridTemplateColumns: '34px 1fr', gap: 10, alignItems: 'stretch' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -882,6 +1046,11 @@ export default function Route_() {
                             {walkText.meta && <span style={{ fontSize: 12, color: '#64748B', marginLeft: 'auto', fontWeight: 800 }}>{walkText.meta}</span>}
                           </div>
                           <p style={{ fontSize: 13, color: '#64748B', margin: 0, lineHeight: 1.45 }}>{walkText.detail}</p>
+                          {stepGuide?.actionUrl && (
+                            <a href={stepGuide.actionUrl} target="_blank" rel="noreferrer" style={{ marginTop: 10, minHeight: 42, borderRadius: 12, background: '#E0F2FE', color: '#0369A1', textDecoration: 'none', fontSize: 14, fontWeight: 950, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              카카오맵 도보 안내
+                            </a>
+                          )}
                         </div>
                       ) : step.type === 'bus' ? (
                         <div style={{ background: '#F8F9FA', borderRadius: 14, padding: '13px 14px', border: '1px solid #E2E8F0' }}>
