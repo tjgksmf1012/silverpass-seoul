@@ -70,6 +70,9 @@ async function checkProductionApis() {
 
   const subway = await fetchJson(`/api/subway?station=${encodeURIComponent('시청')}`)
   add('api:subway-arrival', subway.res.ok && !subway.json._demo && Boolean(subway.json?.realtimeArrivalList?.length), `${subway.res.status} ${subway.ms}ms`)
+
+  const walkRoute = await fetchJson('/api/walk-route?startLat=37.5546788&startLng=126.9706069&endLat=37.555516&endLng=126.972203')
+  add('api:walk-route', walkRoute.res.ok && walkRoute.json?.points?.length >= 2, `${walkRoute.res.status} ${walkRoute.ms}ms points=${walkRoute.json?.points?.length || 0}`)
 }
 
 async function checkOdsay() {

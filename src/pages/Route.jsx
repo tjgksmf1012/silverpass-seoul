@@ -5,6 +5,7 @@ import { getRouteData, getRealtimeSubwayArrival } from '../services/seoulApi.js'
 import { generateSubwayGuide } from '../services/claude.js'
 import { searchPlaces, findKnownSeoulPlace } from '../services/kakaoSearch.js'
 import { searchTransitRoute, getRealtimeBusInfo, formatArrivalTime, getTransitRouteIssue, pathTypeIcon } from '../services/odsayApi.js'
+import { getWalkingRoute, enhanceRouteWalkingGeometry } from '../services/walkingRoute.js'
 import { getCurrentUser, getElderInfo, saveHistory } from '../services/auth.js'
 import { ArrowLeft, BusIcon, ElevatorIcon, WindIcon,
          ShelterIcon, AlertIcon, SearchIcon, MapPin } from '../components/Icons.jsx'
@@ -195,6 +196,7 @@ export default function Route_() {
   const [realtimeBus, setRealtimeBus]     = useState(null)  // ODsay 버스 실시간
   const [transitIssue, setTransitIssue]   = useState('')
   const [liveCoords, setLiveCoords]       = useState(null)
+  const [walkOnlyGeometry, setWalkOnlyGeometry] = useState(null)
   const [selectedRoute, setSelectedRoute] = useState(0)     // 선택된 경로 인덱스
   const [currentGuideStep, setCurrentGuideStep] = useState(0)
   const [showFullSteps, setShowFullSteps] = useState(false)
@@ -242,6 +244,7 @@ export default function Route_() {
     setTransitIssue('')
     setSelectedRoute(0)
     setLiveCoords(null)
+    setWalkOnlyGeometry(null)
     setRouteData(prev => prev ? { ...prev, coordsBased: false, coordSource: null, startLabel: null, viaLabel: null } : prev)
   }
 
@@ -384,6 +387,7 @@ export default function Route_() {
     setTransitRoutes(null)
     setRealtimeBus(null)
     setTransitIssue('')
+    setWalkOnlyGeometry(null)
 
     // 거리/시간 즉시 업데이트
     setRouteData(prev => prev ? {
@@ -395,6 +399,16 @@ export default function Route_() {
       startLabel: coords.startLabel || '',
       viaLabel: coords.via?.name || '',
     } : prev)
+
+    const routeStart = { lat: coords.user.lat, lng: coords.user.lng }
+    const routeEnd = { lat: coords.dest.lat, lng: coords.dest.lng }
+    if (!coords.via?.lat && coords.dist <= WALK_ONLY_FALLBACK_DISTANCE_M * 2) {
+      getWalkingRoute(routeStart, routeEnd)
+        .then(walk => {
+          if (coordsApplied.current === key) setWalkOnlyGeometry(walk)
+        })
+        .catch(() => {})
+    }
 
     // ODsay 경로 탐색 (출발: user, 도착: dest. 경도/위도 순서 주의)
     let routes = null
@@ -413,6 +427,8 @@ export default function Route_() {
       )
     }
     if (routes?.length) {
+      routes = await Promise.all(routes.map(route => enhanceRouteWalkingGeometry(route, routeStart, routeEnd)))
+      if (coordsApplied.current !== key) return
       const rankedRoutes = applyRoutePreferences(routes, profile)
       setTransitRoutes(rankedRoutes)
       setTransitIssue('')
@@ -516,6 +532,11 @@ export default function Route_() {
     directDistance <= WALK_ONLY_FALLBACK_DISTANCE_M &&
     transitDetourRatio >= WALK_ONLY_DETOUR_RATIO
   const hasWalkCoords = hasCoords(liveCoords?.user) && hasCoords(liveCoords?.dest)
+  const walkOnlyDistance = walkOnlyGeometry?.distance || directDistance
+  const hasResolvedStart = Boolean(manualStart || hasWalkCoords || routeData?.coordsBased)
+  const safetyStatus = hasResolvedStart
+    ? b
+    : { bg: '#FFF7ED', border: '#FED7AA', text: '#C2410C', accent: '#F59E0B', label: '출발지 필요' }
   const isWalkOnlyRoute = Boolean(
     hasWalkCoords &&
     !viaPlace &&
@@ -526,18 +547,24 @@ export default function Route_() {
       transitDetoursTooMuch
     )
   )
-  const walkOnlyMinutes = directDistance ? Math.max(5, Math.ceil(directDistance / 45) + 3) : routeData?.duration
-  const displayPrimaryTime = isWalkOnlyRoute ? walkOnlyMinutes : primaryTime
-  const displayPrimaryWalk = isWalkOnlyRoute ? directDistance : primaryWalk
-  const routeBadge = isWalkOnlyRoute
+  const walkOnlyMinutes = walkOnlyDistance ? Math.max(5, Math.ceil(walkOnlyDistance / 45) + 3) : routeData?.duration
+  const displayPrimaryTime = hasResolvedStart ? (isWalkOnlyRoute ? walkOnlyMinutes : primaryTime) : null
+  const displayPrimaryWalk = hasResolvedStart ? (isWalkOnlyRoute ? walkOnlyDistance : primaryWalk) : null
+  const routeBadge = !hasResolvedStart
+    ? '출발지 필요'
+    : isWalkOnlyRoute
     ? '도보 전용'
     : hasExactRoute
       ? (isManualRoute ? '맞춤 경로' : '실시간 경로')
       : (transitIssue ? 'API 확인 필요' : (manualStart ? '좌표 기준 안내' : '위치 허용 필요'))
-  const noExactTitle = manualStart
+  const noExactTitle = !hasResolvedStart
+    ? '출발지를 먼저 지정해 주세요'
+    : manualStart
     ? '선택한 출발지 기준으로 안내 중이에요'
     : '정확한 정류장·환승 순서는 위치 허용 후 표시돼요'
-  const noExactBody = manualStart
+  const noExactBody = !hasResolvedStart
+    ? '현재 위치 권한이 없으면 서울역처럼 출발지를 검색해 주세요. 출발지가 정해진 뒤에만 거리, 예상 시간, 정류장 순서를 보여드려요.'
+    : manualStart
     ? (transitIssue
       ? `대중교통 경로 API 응답을 확인해야 해요. 현재는 출발지와 목적지 좌표 기준으로 기본 이동 순서만 보여드려요. (${transitIssue})`
       : '정확한 대중교통 경로가 확인되면 정류장·환승 순서로 자동 보강돼요. 지금은 거리와 기본 이동 순서를 먼저 보여드려요.')
@@ -587,13 +614,16 @@ export default function Route_() {
       return [{
         type: 'walk',
         title: `${destination}까지 걷기`,
-        distance: directDistance,
+        distance: walkOnlyDistance,
         sectionTime: walkOnlyMinutes,
         detail: `${startDisplay}에서 목적지까지 도보 중심으로 안내해요. 대기질, 쉼터, 응급 정보는 계속 공공데이터로 확인해요.`,
-        meta: `${formatDistance(directDistance)} · 약 ${walkOnlyMinutes}분`,
+        meta: `${formatDistance(walkOnlyDistance)} · 약 ${walkOnlyMinutes}분`,
         startPoint: liveCoords?.user,
         endPoint: liveCoords?.dest,
-        routePoints: compactRoutePoints([liveCoords?.user, liveCoords?.dest]),
+        routePoints: walkOnlyGeometry?.points?.length >= 2
+          ? walkOnlyGeometry.points
+          : compactRoutePoints([liveCoords?.user, liveCoords?.dest]),
+        routeSource: walkOnlyGeometry?.points?.length >= 2 ? 'walking-route' : undefined,
       }]
     }
 
@@ -691,14 +721,16 @@ export default function Route_() {
   })
   const activeGuideIndex = Math.min(currentGuideStep, Math.max(guideSteps.length - 1, 0))
   const activeGuide = guideSteps[activeGuideIndex]
-  const mapRouteGuide = isWalkOnlyRoute || !hasExactRoute
-    ? { steps: fullRouteSteps, totalDistance: displayPrimaryWalk, totalTime: displayPrimaryTime }
-    : bestRoute
+  const mapRouteGuide = !hasResolvedStart
+    ? null
+    : isWalkOnlyRoute || !hasExactRoute
+      ? { steps: fullRouteSteps, totalDistance: displayPrimaryWalk, totalTime: displayPrimaryTime }
+      : bestRoute
   const routeSourceText = isWalkOnlyRoute
     ? `도보 거리와 ${air?.grade ? `대기질 ${air.grade}` : '대기질'}을 함께 봅니다.`
     : `${selectedCriteria?.label || '추천 경로'} 기준으로 대중교통, 저상버스, 승강기 정보를 함께 봅니다.`
   const routeSummaryItems = [
-    { label: '총 소요', value: `${displayPrimaryTime}분`, color: '#0D9488' },
+    { label: '총 소요', value: displayPrimaryTime ? `${displayPrimaryTime}분` : '-', color: '#0D9488' },
     { label: '전체 도보', value: formatDistance(displayPrimaryWalk), color: '#374151' },
     { label: '요금', value: isWalkOnlyRoute ? '없음' : (bestRoute?.totalFare ? `${bestRoute.totalFare.toLocaleString()}원` : '확인 중'), color: '#7C3AED' },
   ]
@@ -744,8 +776,14 @@ export default function Route_() {
         <div style={{ marginLeft: 'auto', textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
           <p style={{ fontSize: 13, color: '#64748B', margin: 0, fontWeight: 800 }}>예상 시간</p>
           <p style={{ fontSize: 30, fontWeight: 900, color: '#0D9488', margin: '-1px 0 0', lineHeight: 1 }}>
-            {displayPrimaryTime}
-            <span style={{ fontSize: 16, fontWeight: 800 }}>분</span>
+            {displayPrimaryTime ? (
+              <>
+                {displayPrimaryTime}
+                <span style={{ fontSize: 16, fontWeight: 800 }}>분</span>
+              </>
+            ) : (
+              <span style={{ fontSize: 16, fontWeight: 950, color: '#C2410C' }}>출발지 필요</span>
+            )}
           </p>
           {isWalkOnlyRoute
             ? <span style={{ fontSize: 12, background: '#EFF6FF', color: '#2563EB', fontWeight: 900, padding: '3px 8px', borderRadius: 20 }}>🚶 도보 전용</span>
@@ -753,7 +791,7 @@ export default function Route_() {
             ? <span style={{ fontSize: 12, background: '#F0FDFA', color: '#059669', fontWeight: 900, padding: '3px 8px', borderRadius: 20 }}>{isManualRoute ? '📍 직접 지정' : '🚌 실시간'}</span>
             : isLive
               ? <span style={{ fontSize: 12, background: '#ECFDF5', color: '#059669', fontWeight: 900, padding: '3px 8px', borderRadius: 20 }}>{isManualRoute ? '📍 출발지 지정' : '📍 GPS'}</span>
-              : <p style={{ fontSize: 12, color: '#64748B', margin: '3px 0 0', fontWeight: 700 }}>대중교통 추정</p>
+              : <span style={{ fontSize: 12, background: '#FFF7ED', color: '#C2410C', fontWeight: 900, padding: '3px 8px', borderRadius: 20 }}>📍 출발지 필요</span>
           }
           <button onClick={() => navigate('/emergency')} style={{ border: '1px solid #FECACA', borderRadius: 12, background: '#FEF2F2', color: '#B91C1C', fontWeight: 950, fontSize: 12, padding: '6px 9px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, fontFamily: 'inherit' }}>
             <AlertIcon size={14} color="#DC2626" stroke={2} /> 응급
@@ -888,12 +926,18 @@ export default function Route_() {
         {/* ── 이동 안전 체크 ── */}
         <div style={{ order: 3, background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 16, padding: '12px 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: b.accent }} />
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: safetyStatus.accent }} />
             <p style={{ fontSize: 15, fontWeight: 950, color: '#0F172A', margin: 0 }}>안심 체크</p>
-            <span style={{ marginLeft: 'auto', color: b.text, background: b.bg, border: `1px solid ${b.border}`, borderRadius: 20, padding: '4px 9px', fontSize: 12, fontWeight: 950 }}>{b.label}</span>
+            <span style={{ marginLeft: 'auto', color: safetyStatus.text, background: safetyStatus.bg, border: `1px solid ${safetyStatus.border}`, borderRadius: 20, padding: '4px 9px', fontSize: 12, fontWeight: 950 }}>{safetyStatus.label}</span>
           </div>
           <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-            {(isWalkOnlyRoute
+            {(!hasResolvedStart
+              ? [
+                { Icon: MapPin, label: '출발지 필요', ok: false },
+                { Icon: MapPin, label: '목적지 확인', ok: true },
+                { Icon: WindIcon, label: `대기질 ${air?.grade || '보통'}`, ok: !air?.airAlert },
+              ]
+              : isWalkOnlyRoute
               ? [
                 { Icon: MapPin, label: `${formatDistance(displayPrimaryWalk)} 도보`, ok: true },
                 { Icon: WindIcon, label: `대기질 ${air?.grade || '보통'}`, ok: !air?.airAlert },
@@ -906,7 +950,7 @@ export default function Route_() {
               ]
             ).map(({ Icon, label, ok }, i) => (
               <div key={i} style={{ flex: '1 1 120px', minHeight: 42, background: ok ? '#F8FAFC' : '#FFF7ED', border: `1px solid ${ok ? '#E2E8F0' : '#FED7AA'}`, borderRadius: 12, padding: '9px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
-                <Icon size={17} color={ok ? b.accent : '#DC2626'} stroke={2} />
+                <Icon size={17} color={ok ? safetyStatus.accent : '#DC2626'} stroke={2} />
                 <p style={{ fontSize: 13, fontWeight: 900, color: ok ? '#374151' : '#DC2626', margin: 0, lineHeight: 1.25 }}>{label}</p>
               </div>
             ))}
@@ -939,7 +983,7 @@ export default function Route_() {
         )}
 
         {/* ── ④ 전체 경로 ── */}
-        {routeData && (
+        {routeData && hasResolvedStart && (
           <div style={{ order: 2, background: '#fff', border: '1.5px solid #D9F7EF', borderRadius: 18, overflow: 'hidden', boxShadow: '0 2px 8px rgba(15,23,42,0.05)' }}>
             <div style={{ padding: '13px 16px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 7, height: 7, borderRadius: '50%', background: isWalkOnlyRoute ? '#2563EB' : hasExactRoute ? '#059669' : '#F59E0B', animation: hasExactRoute && !isWalkOnlyRoute ? 'liveP 1.5s infinite' : 'none' }} />

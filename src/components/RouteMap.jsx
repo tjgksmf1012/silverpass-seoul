@@ -122,6 +122,7 @@ function stepEndOverlayHtml(step, nextStep) {
 function drawRouteGuideLine(kakao, map, path, source, active = false) {
   const styles = {
     walk: { color: '#2563EB', weight: 5, opacity: 0.78, style: 'shortdash' },
+    walkRoute: { color: '#2563EB', weight: 6, opacity: 0.9, style: 'solid' },
     bus: { color: '#059669', weight: 6, opacity: 0.78, style: 'solid' },
     subway: { color: '#7C3AED', weight: 6, opacity: 0.78, style: 'solid' },
     flow: { color: '#0D9488', weight: 4, opacity: 0.62, style: 'shortdash' },
@@ -228,10 +229,11 @@ function fallbackStepPoints(step, index, steps, basePoints) {
 
 function createRouteGuideSegments(kakao, basePoints, routeGuide, routeMode) {
   if (routeMode === 'walk') {
+    const walkStep = routeGuide?.steps?.[0] || { type: 'walk', distance: routeGuide?.totalDistance }
     return [{
-      source: 'walk',
-      path: createDirectGuidePath(kakao, basePoints),
-      step: routeGuide?.steps?.[0] || { type: 'walk', distance: routeGuide?.totalDistance },
+      source: walkStep.routeSource === 'walking-route' ? 'walkRoute' : 'walk',
+      path: createDirectGuidePath(kakao, stepPathPoints(walkStep).length >= 2 ? stepPathPoints(walkStep) : basePoints),
+      step: walkStep,
       nextStep: null,
       index: 0,
     }]
@@ -242,7 +244,13 @@ function createRouteGuideSegments(kakao, basePoints, routeGuide, routeMode) {
     const points = fallbackStepPoints(step, index, steps, basePoints)
     if (points.length < 2) return []
     return [{
-      source: step.type === 'bus' ? 'bus' : step.type === 'subway' ? 'subway' : 'walk',
+      source: step.type === 'bus'
+        ? 'bus'
+        : step.type === 'subway'
+        ? 'subway'
+        : step.routeSource === 'walking-route'
+        ? 'walkRoute'
+        : 'walk',
       path: points.map(point => toLatLng(kakao, point)),
       step,
       nextStep: steps[index + 1] || null,
@@ -372,8 +380,11 @@ function stepInstructionItems(step, direction, nextStep) {
       nextStep?.type === 'bus' ? '버스 타는 곳' :
       nextStep?.type === 'subway' ? '지하철 타는 곳' :
       '다음 표식'
+    const routeLead = step.routeSource === 'walking-route'
+      ? '지도 위 파란 보행 경로를 따라 '
+      : (direction ? `${direction.label} 방향으로 ` : '지도 위 파란 선 방향으로 ')
     return [
-      `${direction ? `${direction.label} 방향으로 ` : '지도 위 파란 선 방향으로 '}${walkDistanceText(step)} 이동`,
+      `${routeLead}${walkDistanceText(step)} 이동`,
       '횡단보도와 보행로를 우선해서 천천히 이동',
       `지도에서 ${nextMarker}을 찾으면 다음 안내 확인`,
     ]
@@ -672,12 +683,19 @@ export default function RouteMap({
     }
   }, [destination, searchKeyword, placeCoords, startPlace, viaPlace, routeGuide, routeMode, currentStepIndex, focusMode])
 
-  const routeDistance = Number(routeGuide?.totalDistance) > 0 ? Number(routeGuide.totalDistance) : distInfo?.dist
-  const routeDuration = Number(routeGuide?.totalTime) > 0 ? Number(routeGuide.totalTime) : distInfo?.duration
-  const hasRouteMetrics = Number(routeGuide?.totalDistance) > 0 || Number(routeGuide?.totalTime) > 0
-  const routeDistanceText = distanceLabel(routeDistance)
+  const hasStartForMap = Boolean(
+    (startPlace?.lat && startPlace?.lng) ||
+    Number(distInfo?.dist) > 0
+  )
+  const routeDistance = hasStartForMap
+    ? (Number(routeGuide?.totalDistance) > 0 ? Number(routeGuide.totalDistance) : distInfo?.dist)
+    : null
+  const routeDuration = hasStartForMap
+    ? (Number(routeGuide?.totalTime) > 0 ? Number(routeGuide.totalTime) : distInfo?.duration)
+    : null
+  const hasRouteMetrics = hasStartForMap && (Number(routeGuide?.totalDistance) > 0 || Number(routeGuide?.totalTime) > 0)
+  const routeDistanceText = Number(routeDistance) > 0 ? distanceLabel(routeDistance) : null
   const stepsForMap = mapStepItems(routeGuide, routeMode)
-  const hasStartForMap = Boolean(distInfo || (startPlace?.lat && startPlace?.lng))
   const safeStepIndex = stepsForMap.length ? Math.min(currentStepIndex, stepsForMap.length - 1) : 0
   const activeMapStep = stepsForMap[safeStepIndex]
   const activeStepStyle = STEP_STYLE[activeMapStep?.type] || STEP_STYLE.walk
