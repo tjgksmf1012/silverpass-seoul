@@ -15,7 +15,7 @@ function loadKakaoSDK() {
   sdkPromise = new Promise((resolve, reject) => {
     if (window.kakao?.maps?.services) { resolve(); return }
     const script = document.createElement('script')
-    script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_KEY}&libraries=services&autoload=false`
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_KEY}&libraries=services&autoload=false`
     script.onload = () => { window.kakao.maps.load(() => resolve()) }
     script.onerror = () => { sdkPromise = null; reject(new Error('카카오맵 SDK 로드 실패')) }
     document.head.appendChild(script)
@@ -41,14 +41,14 @@ function pointOverlayHtml(name, color) {
   `
 }
 
-function drawRouteGuideLine(kakao, map, path) {
+function drawRouteGuideLine(kakao, map, path, source) {
   return new kakao.maps.Polyline({
     map,
     path,
-    strokeWeight: 5,
-    strokeColor: '#0D9488',
-    strokeOpacity: 0.78,
-    strokeStyle: 'solid',
+    strokeWeight: source === 'flow' ? 4 : 3,
+    strokeColor: source === 'flow' ? '#0D9488' : '#64748B',
+    strokeOpacity: source === 'flow' ? 0.62 : 0.5,
+    strokeStyle: 'shortdash',
   })
 }
 
@@ -69,38 +69,36 @@ function toLatLng(kakao, point) {
   return new kakao.maps.LatLng(point.lat, point.lng)
 }
 
-function createRoadLikePath(kakao, points) {
+function createDirectGuidePath(kakao, points) {
   const normalized = compactRoutePoints(points)
-  if (normalized.length < 2) return normalized.map(point => toLatLng(kakao, point))
+  return normalized.map(point => toLatLng(kakao, point))
+}
 
-  const shaped = [normalized[0]]
-  normalized.slice(1).forEach(point => {
-    const prev = shaped[shaped.length - 1]
-    const dLat = point.lat - prev.lat
-    const dLng = point.lng - prev.lng
-    shaped.push(
-      { lat: prev.lat + dLat * 0.32, lng: prev.lng },
-      { lat: prev.lat + dLat * 0.32, lng: prev.lng + dLng * 0.68 },
-      { lat: prev.lat + dLat * 0.72, lng: prev.lng + dLng * 0.68 },
-      point,
-    )
-  })
+function createRouteFlowPoints(routeGuide) {
+  const stepPoints = compactRoutePoints((routeGuide?.steps || []).flatMap(step => [
+    step.startPoint,
+    step.endPoint,
+  ]))
+  if (stepPoints.length >= 2) return stepPoints
 
-  return compactRoutePoints(shaped).map(point => toLatLng(kakao, point))
+  const routePoints = compactRoutePoints(routeGuide?.routePoints || [])
+  if (routePoints.length >= 2) return [routePoints[0], routePoints[routePoints.length - 1]]
+
+  return []
 }
 
 function createRouteGuidePath(kakao, basePoints, routeGuide) {
-  const routePoints = compactRoutePoints(routeGuide?.routePoints || [])
-  if (routePoints.length >= 2) {
-    const points = compactRoutePoints([basePoints[0], ...routePoints, basePoints[basePoints.length - 1]])
+  const flowPoints = createRouteFlowPoints(routeGuide)
+  if (flowPoints.length >= 2) {
+    const points = compactRoutePoints([basePoints[0], ...flowPoints, basePoints[basePoints.length - 1]])
     return {
       path: points.map(point => toLatLng(kakao, point)),
-      source: 'transit',
+      source: 'flow',
     }
   }
 
   return {
-    path: createRoadLikePath(kakao, basePoints),
+    path: createDirectGuidePath(kakao, basePoints),
     source: 'guide',
   }
 }
@@ -121,6 +119,12 @@ function getRouteDistance(points) {
 
 function estimateDuration(dist) {
   return Math.max(8, Math.min(Math.ceil(dist / 1000 / 20 * 60) + 5 + Math.ceil(dist / 1000), 90))
+}
+
+function distanceLabel(meters) {
+  const value = Number(meters)
+  if (!Number.isFinite(value)) return null
+  return value < 1000 ? `${Math.round(value)}m` : `${(value / 1000).toFixed(1)}km`
 }
 
 function isInSeoul(lat, lng) {
@@ -241,19 +245,22 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
               { lat: destLat, lng: destLng },
             ]
             const { path: linePath, source: lineSource } = createRouteGuidePath(kakao, basePoints, routeGuide)
-            polylineRef.current = drawRouteGuideLine(kakao, map, linePath)
+            if (linePath.length >= 2) {
+              polylineRef.current = drawRouteGuideLine(kakao, map, linePath, lineSource)
+            }
 
             const bounds = new kakao.maps.LatLngBounds()
-            linePath.forEach(point => bounds.extend(point))
+            const boundsPath = linePath.length ? linePath : [startLatLng, destLatLng]
+            boundsPath.forEach(point => bounds.extend(point))
             map.setBounds(bounds, 60, 60, 60, 60)
 
             const dist = Math.round(getRouteDistance(basePoints) * 1.35)
             const duration = estimateDuration(dist)
 
             setDistInfo({ dist, duration })
-            setLocationNote(lineSource === 'transit'
-              ? '지도 선은 정류장과 역 좌표를 이어 표시해요. 자세한 순서는 아래 전체 경로를 확인하세요.'
-              : '지도 선은 도로처럼 꺾어 보이도록 한 안내선이에요. 실제 순서는 아래 전체 경로를 확인하세요.'
+            setLocationNote(lineSource === 'flow'
+              ? '지도 선은 실제 도로 선형이 아니라 출발·환승·도착 흐름만 간단히 이어 보여요. 정확한 순서는 위 전체 경로를 따르세요.'
+              : '지도 선은 직선 기준 참고선이에요. 정확한 순서는 위 전체 경로를 따르세요.'
             )
             onCoordsReady?.({
               user: { lat: start.lat, lng: start.lng },
@@ -319,6 +326,11 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
     }
   }, [destination, searchKeyword, placeCoords, startPlace, viaPlace, routeGuide])
 
+  const routeDistance = Number(routeGuide?.totalDistance) > 0 ? Number(routeGuide.totalDistance) : distInfo?.dist
+  const routeDuration = Number(routeGuide?.totalTime) > 0 ? Number(routeGuide.totalTime) : distInfo?.duration
+  const hasRouteMetrics = Number(routeGuide?.totalDistance) > 0 || Number(routeGuide?.totalTime) > 0
+  const routeDistanceText = distanceLabel(routeDistance)
+
   return (
     <div style={{
       background: '#fff', border: '1.5px solid #F1F5F9',
@@ -334,16 +346,20 @@ export default function RouteMap({ destination, searchKeyword, placeCoords, star
           <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
           <circle cx="12" cy="10" r="3"/>
         </svg>
-        <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0 }}>지도</p>
+        <p style={{ fontWeight: 800, fontSize: 14, color: '#0F172A', margin: 0 }}>위치도</p>
 
-        {distInfo && (
+        {(routeDistanceText || routeDuration) && (
           <div style={{ marginLeft: 8, display: 'flex', gap: 6 }}>
-            <span style={{ background: '#F0FDFA', color: '#0D9488', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, border: '1px solid #CCFBF1' }}>
-              📍 {distInfo.dist < 1000 ? `${distInfo.dist}m` : `${(distInfo.dist/1000).toFixed(1)}km`}
-            </span>
-            <span style={{ background: '#EFF6FF', color: '#2563EB', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, border: '1px solid #DBEAFE' }}>
-              🕐 약 {distInfo.duration}분
-            </span>
+            {routeDistanceText && (
+              <span style={{ background: '#F0FDFA', color: '#0D9488', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, border: '1px solid #CCFBF1' }}>
+                {hasRouteMetrics ? '경로' : '직선'} {routeDistanceText}
+              </span>
+            )}
+            {routeDuration && (
+              <span style={{ background: '#EFF6FF', color: '#2563EB', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, border: '1px solid #DBEAFE' }}>
+                약 {routeDuration}분
+              </span>
+            )}
           </div>
         )}
 

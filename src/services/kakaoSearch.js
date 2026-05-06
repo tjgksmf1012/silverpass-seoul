@@ -32,7 +32,7 @@ function loadSDK() {
   sdkPromise = new Promise((resolve, reject) => {
     if (window.kakao?.maps?.services) { resolve(); return }
     const s = document.createElement('script')
-    s.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_KEY}&libraries=services&autoload=false`
+    s.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_KEY}&libraries=services&autoload=false`
     s.onload = () => window.kakao.maps.load(resolve)
     s.onerror = (e) => { sdkPromise = null; reject(e) }
     document.head.appendChild(s)
