@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { getProfile, addHistory } from '../services/storage.js'
 import { getRouteData, getRealtimeSubwayArrival } from '../services/seoulApi.js'
-import { generateRouteExplanation, generateSubwayGuide } from '../services/claude.js'
+import { generateSubwayGuide } from '../services/claude.js'
 import { searchPlaces } from '../services/kakaoSearch.js'
 import { searchTransitRoute, getRealtimeBusInfo, formatArrivalTime, pathTypeIcon } from '../services/odsayApi.js'
 import { getCurrentUser, getElderInfo, saveHistory } from '../services/auth.js'
@@ -15,8 +15,6 @@ const BURDEN = {
   medium: { bg: '#FFFBEB', border: '#FDE68A', text: '#92400E', accent: '#D97706', label: '보통',     sub: '천천히 이동하시면 괜찮아요' },
   high:   { bg: '#FEF2F2', border: '#FECACA', text: '#991B1B', accent: '#DC2626', label: '힘들 수 있어요', sub: '보호자와 함께 이동하세요' },
 }
-const AIR_COLOR = { '좋음': '#059669', '보통': '#D97706', '나쁨': '#DC2626', '매우나쁨': '#7C2D12' }
-
 const QUICK_ROUTE_POINTS = [
   { name: '서울역', address: '서울 중구 한강대로 405', lat: 37.5546788, lng: 126.9706069 },
   { name: '서울시청', address: '서울 중구 세종대로 110', lat: 37.5662952, lng: 126.9779451 },
@@ -114,7 +112,6 @@ export default function Route_() {
   const navigate = useNavigate()
   const { state } = useLocation()
   const [routeData, setRouteData]         = useState(null)
-  const [explanation, setExplanation]     = useState('')
   const [loading, setLoading]             = useState(true)
   const [activeTab, setActiveTab]         = useState('bus')
   const [subwayGuide, setSubwayGuide]     = useState(null)
@@ -264,8 +261,6 @@ export default function Route_() {
         setSubwayGuide(subway)
         addHistory({ destination, duration: data.duration, burden: data.burden })
         if (user) saveHistory(user.id, { destination, burden: data.burden, duration: String(data.duration) })
-        const exp = await generateRouteExplanation(data, profileWithNotes)
-        setExplanation(exp)
         if (subway?.nearestStation) {
           const arrivals = await getRealtimeSubwayArrival(subway.nearestStation)
           setRealtimeArrivals(arrivals)
@@ -349,10 +344,9 @@ export default function Route_() {
       </div>
       <div style={{ width: '100%', maxWidth: 280, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {[
-          { label: '실시간 대기질 분석', color: '#059669' },
-          { label: '지하철 실시간 도착 정보', color: '#2563EB' },
-          { label: '버스 실시간 경로 탐색', color: '#7C3AED' },
-          { label: '근처 약국 정보', color: '#D97706' },
+          { label: '대중교통 경로 탐색', color: '#059669' },
+          { label: '정류장·환승 순서 확인', color: '#2563EB' },
+          { label: '도보 구간 정리', color: '#7C3AED' },
         ].map((item, i) => (
           <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 12, padding: '12px 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', animation: `fadeIn 0.4s ease ${i * 0.15}s both` }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.color, animation: 'pulse 1.5s ease-in-out infinite', flexShrink: 0 }} />
@@ -370,7 +364,6 @@ export default function Route_() {
 
   const b = BURDEN[routeData?.burden] || BURDEN.low
   const air = routeData?.airQuality
-  const airColor = AIR_COLOR[air?.grade] || '#64748B'
   const isLive = routeData?.coordsBased
   const bestRoute = transitRoutes?.[selectedRoute]
   const selectedCriteria = getRouteCriteria(bestRoute, selectedRoute, transitRoutes || [])
@@ -1062,45 +1055,6 @@ export default function Route_() {
             </div>
           )}
         </div>
-
-        {/* ── 대기질 ── */}
-        {air && (
-          <div style={{ order: 7, background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <WindIcon size={16} color="#0F172A" />
-              <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0 }}>대기질</p>
-              <span style={{ marginLeft: 'auto', background: airColor + '18', color: airColor, fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 20 }}>{air.grade}</span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              {[{ label: 'PM10 미세먼지', val: air.pm10, max: 150 }, { label: 'PM2.5 초미세먼지', val: air.pm25, max: 75 }].map(item => (
-                <div key={item.label} style={{ background: '#F8F9FA', borderRadius: 12, padding: '12px' }}>
-                  <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 4px', fontWeight: 600 }}>{item.label}</p>
-                  <p style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', margin: '0 0 8px' }}>
-                    {item.val}<span style={{ fontSize: 11, fontWeight: 500, color: '#94A3B8' }}> ㎍/㎥</span>
-                  </p>
-                  <div style={{ height: 4, background: '#E2E8F0', borderRadius: 99 }}>
-                    <div style={{ height: '100%', borderRadius: 99, width: `${Math.min(100, Math.round(item.val / item.max * 100))}%`, background: airColor, transition: 'width 0.6s ease' }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p style={{ fontSize: 11, color: '#CBD5E1', margin: '10px 0 0', textAlign: 'right' }}>측정소: {air.station}</p>
-          </div>
-        )}
-
-        {/* ── AI 안내 ── */}
-        {explanation && (
-          <div style={{ order: 6, background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, padding: '18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'linear-gradient(135deg, #0F766E, #0D9488)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h18M3 6h18M3 18h12"/></svg>
-              </div>
-              <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0 }}>이동 안내</p>
-              <span style={{ marginLeft: 'auto', background: '#F0FDFA', color: '#0D9488', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20 }}>AI</span>
-            </div>
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: '#374151', margin: 0, whiteSpace: 'pre-line' }}>{explanation}</p>
-          </div>
-        )}
 
         {/* ── 무더위쉼터 ── */}
         {routeData?.shelters?.length > 0 && (
