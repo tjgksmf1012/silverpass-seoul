@@ -101,15 +101,15 @@ export default function Login() {
           <>
             <p className="text-center text-gray-500 text-senior mb-2">어떻게 사용하실 건가요?</p>
 
-            {/* 길찾기 사용자 */}
+            {/* 어르신 */}
             <button
               onClick={() => { setStep('elder'); setError('') }}
               className="w-full flex items-center gap-4 p-5 bg-white rounded-3xl border-2 border-brand-200 hover:border-brand-400 transition-all active:scale-95 shadow-sm"
             >
               <span className="text-4xl">🧭</span>
               <div className="text-left">
-                <p className="text-lg font-bold text-gray-900">길찾기 사용자</p>
-                <p className="text-sm text-gray-500">초대 코드가 있으면 연결하고, 없어도 바로 시작해요</p>
+                <p className="text-lg font-bold text-gray-900">어르신</p>
+                <p className="text-sm text-gray-500">보호자 초대 코드가 있으면 연결하고, 없어도 바로 시작해요</p>
               </div>
             </button>
 
@@ -121,7 +121,7 @@ export default function Login() {
               <span className="text-4xl">👨‍👩‍👧</span>
               <div className="text-left">
                 <p className="text-lg font-bold text-gray-900">계정 로그인</p>
-                <p className="text-sm text-gray-500">보호자 또는 일반 사용자 계정으로 들어가요</p>
+                <p className="text-sm text-gray-500">어르신 또는 보호자 계정으로 들어가요</p>
               </div>
             </button>
           </>
@@ -192,7 +192,7 @@ export default function Login() {
                 {/* 역할 선택 */}
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: 'user', icon: '🧭', label: '길찾기 사용자', sub: '내 이동 조건으로 길찾기' },
+                    { id: 'user', icon: '🧭', label: '어르신', sub: '내 이동 조건으로 길찾기' },
                     { id: 'guardian', icon: '👨‍👩‍👧', label: '보호자', sub: '어르신 관리·모니터링' },
                   ].map(r => (
                     <button key={r.id} type="button" onClick={() => setSignupRole(r.id)}

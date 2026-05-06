@@ -164,7 +164,7 @@ export default function Profile() {
           </Card>
         )}
 
-        {/* 보호자 전화번호 - 길찾기 사용자에게만 표시 */}
+        {/* 보호자 전화번호 - 어르신에게만 표시 */}
         {isRouteUser && (
           <Card icon={<PhoneIcon size={15} color="#0D9488" />} title="보호자 전화번호">
             <input type="tel" value={profile.guardianPhone} onChange={e => update('guardianPhone', e.target.value)}

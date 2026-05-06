@@ -13,8 +13,8 @@ export default function RoleSelect() {
     {
       id: 'user',
       emoji: '🧭',
-      title: '길찾기 사용자',
-      desc: '내 조건에 맞는\n경로 안내를 받을게요',
+      title: '어르신',
+      desc: '내 조건에 맞는\n쉬운 길 안내를 받을게요',
       color: 'border-brand-500 bg-brand-50',
       activeColor: 'border-brand-600 bg-brand-100 ring-2 ring-brand-400',
     },
