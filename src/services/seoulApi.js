@@ -282,6 +282,7 @@ export async function getBusArrival(arsId = null) {
 // ─── 통합 경로 데이터 ─────────────────────────────────────────────────────────
 export async function getRouteData(destination, profile, coords = null) {
   const district = profile.district || '종로구'
+  const paceMultiplier = profile.slowPace ? 1.2 : 1
 
   // coords = { user: {lat,lng}, dest: {lat,lng} }. RouteMap에서 얻은 실제 좌표
   const walkDistance = coords?.user && coords?.dest
@@ -289,8 +290,8 @@ export async function getRouteData(destination, profile, coords = null) {
     : (profile.mobilityAid ? 350 : 500)  // 좌표 없을 때 기본값 상향
 
   const duration = coords?.user && coords?.dest
-    ? calcTransitDuration(walkDistance)
-    : (profile.mobilityAid ? 18 : 15)
+    ? Math.ceil(calcTransitDuration(walkDistance) * paceMultiplier)
+    : Math.ceil((profile.mobilityAid ? 18 : 15) * paceMultiplier)
 
   const [air, bus, elevator, toilets, shelters, pharmacies] = await Promise.all([
     getAirQuality(district),
@@ -340,7 +341,10 @@ function calcBurden(air, elevator, profile) {
   if (air.airAlert) score += 2
   if (air.pm10 > 80) score += 1
   if (!elevator.allOk && !profile.allowStairs) score += 3
+  if (!elevator.allOk && profile.preferElevator) score += 2
   if (profile.mobilityAid) score += 1
+  if (profile.needRestStops) score += 1
+  if (profile.slowPace) score += 1
   if (/(휠체어|워커|지팡이|보행)/.test(notes)) score += 1
   if (/(심장|호흡|어지럼|무릎|허리|수술|천천히|쉬)/.test(notes)) score += 1
   if (score === 0) return 'low'

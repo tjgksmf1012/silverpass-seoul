@@ -24,6 +24,11 @@ export const DEFAULT_PROFILE = {
   maxWalkMin: 20,
   allowStairs: false,
   mobilityAid: false,
+  preferLowFloorBus: false,
+  preferElevator: true,
+  avoidTransfers: true,
+  needRestStops: false,
+  slowPace: false,
   healthNotes: '',
   favorites: DEFAULT_FAVORITES,
 }

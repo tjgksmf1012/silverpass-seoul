@@ -110,6 +110,11 @@ function getMockRouteRecommendation(query, profile) {
   else if (q.includes('집') || q.includes('귀가')) { destination = '집'; destinationType = 'home' }
 
   if (!profile?.allowStairs) preferences.push('계단 없음')
+  if (profile?.preferElevator) preferences.push('승강기 우선')
+  if (profile?.preferLowFloorBus) preferences.push('저상버스 우선')
+  if (profile?.avoidTransfers) preferences.push('환승 적게')
+  if (profile?.needRestStops) preferences.push('중간 휴식 가능')
+  if (profile?.slowPace) preferences.push('천천히 걷기')
   if (/(휠체어|워커|지팡이|보행)/.test(notes)) preferences.push('승강기/저상버스 우선')
   if (/(심장|호흡|어지럼|무릎|허리|수술|천천히|쉬)/.test(notes)) preferences.push('짧은 도보와 쉬운 경로')
 

@@ -320,8 +320,8 @@ export default function GuardianDashboard() {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <div>
-                        <label className="text-xs font-semibold text-gray-500 block">자주 가는 곳</label>
-                        <p className="text-xs text-gray-400 mt-0.5">홈 화면에 보일 장소를 보호자가 정할 수 있어요</p>
+                        <label className="text-xs font-semibold text-gray-500 block">바로 출발 목적지</label>
+                        <p className="text-xs text-gray-400 mt-0.5">어르신 홈 화면의 큰 바로 출발 카드에 보여요</p>
                       </div>
                       <button
                         type="button"

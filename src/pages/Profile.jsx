@@ -2,18 +2,12 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import BottomNav from '../components/BottomNav.jsx'
 import { ArrowLeft, UserIcon, PhoneIcon, WalkIcon, SettingsIcon,
-         MapPin, CheckCircle, BuildingIcon, HospitalIcon, PillIcon, HomeIcon } from '../components/Icons.jsx'
+         MapPin, CheckCircle, BuildingIcon } from '../components/Icons.jsx'
 import { getProfile, saveProfile, markVisited } from '../services/storage.js'
 import { getKakaoUser } from '../services/kakaoAuth.js'
 import { getCurrentUser, signOut, getLinkedGuardian, syncElderProfileFromSupabase, syncGuardianProfileFromSupabase } from '../services/auth.js'
 
 const WALK_OPTIONS = [10, 15, 20, 30]
-const FAV_CFG = {
-  복지관: { Icon: BuildingIcon, bg: '#F5F3FF', color: '#7C3AED' },
-  병원:   { Icon: HospitalIcon, bg: '#EFF6FF', color: '#2563EB' },
-  약국:   { Icon: PillIcon,     bg: '#ECFDF5', color: '#059669' },
-  집:     { Icon: HomeIcon,     bg: '#FFFBEB', color: '#D97706' },
-}
 
 export default function Profile() {
   const navigate = useNavigate()
@@ -49,10 +43,22 @@ export default function Profile() {
   }, [isElderly, currentUser?.id])
 
   function update(key, val)  { setProfile(p => ({ ...p, [key]: val })); setSaved(false) }
-  function updateFav(id, field, val) {
-    setProfile(p => ({ ...p, favorites: p.favorites.map(f => f.id === id ? { ...f, [field]: val } : f) }))
-    setSaved(false)
-  }
+  const quickStartPlaces = [
+    profile.homeAddress && { id: 'home', name: '집', icon: '🏠', address: profile.homeAddress, helper: '내 집 주소' },
+    ...(profile.favorites || [])
+      .filter(fav => fav.address && fav.showOnHome !== false)
+      .map(fav => ({
+        id: fav.id,
+        name: fav.name,
+        icon: fav.icon || '📍',
+        address: fav.address,
+        helper: '보호자 등록',
+      })),
+  ].filter(Boolean).reduce((acc, place) => {
+    if (acc.some(item => item.address === place.address)) return acc
+    return [...acc, place]
+  }, [])
+
   function handleSave() {
     const nextProfile = currentUser?.id
       ? { ...profile, ownerId: currentUser.id, profileRole: currentUser.role || 'user' }
@@ -228,39 +234,67 @@ export default function Profile() {
 
         {/* 이동 조건 */}
         <Card icon={<SettingsIcon size={15} color="#0D9488" />} title="이동 조건">
-          <Toggle label="계단 이용 가능" desc="계단 있는 경로도 안내" value={profile.allowStairs} onChange={v => update('allowStairs', v)} />
+          <Toggle label="계단 없는 길 우선" desc="계단보다 엘리베이터·완만한 길을 먼저 안내" value={!profile.allowStairs} onChange={v => update('allowStairs', !v)} />
           <div style={{ height: 1, background: '#F1F5F9', margin: '12px 0' }} />
           <Toggle label="보행보조기구 사용" desc="휠체어, 워커, 지팡이 등" value={profile.mobilityAid} onChange={v => update('mobilityAid', v)} />
+          <div style={{ height: 1, background: '#F1F5F9', margin: '12px 0' }} />
+          <Toggle label="저상버스 우선" desc="버스 경로는 저상버스 가능성을 더 우선" value={profile.preferLowFloorBus} onChange={v => update('preferLowFloorBus', v)} />
+          <div style={{ height: 1, background: '#F1F5F9', margin: '12px 0' }} />
+          <Toggle label="승강기 있는 경로 우선" desc="지하철 출구와 환승은 승강기 접근을 우선" value={profile.preferElevator} onChange={v => update('preferElevator', v)} />
+          <div style={{ height: 1, background: '#F1F5F9', margin: '12px 0' }} />
+          <Toggle label="환승 적은 길 우선" desc="조금 돌아가도 갈아타는 횟수를 줄이기" value={profile.avoidTransfers} onChange={v => update('avoidTransfers', v)} />
+          <div style={{ height: 1, background: '#F1F5F9', margin: '12px 0' }} />
+          <Toggle label="중간에 쉴 곳 필요" desc="쉼터·약국 같은 안전 지점을 더 중요하게 보기" value={profile.needRestStops} onChange={v => update('needRestStops', v)} />
+          <div style={{ height: 1, background: '#F1F5F9', margin: '12px 0' }} />
+          <Toggle label="천천히 걷기" desc="예상 시간을 여유 있게 잡고 도보 부담을 낮추기" value={profile.slowPace} onChange={v => update('slowPace', v)} />
         </Card>
 
-        {/* 자주 가는 곳 */}
-        <Card icon={<MapPin size={15} color="#0D9488" />} title="자주 가는 곳">
-          {profile.favorites.map((fav, i) => {
-            const cfg = FAV_CFG[fav.name] || { Icon: MapPin, bg: '#F0FDFA', color: '#0D9488' }
-            const { Icon } = cfg
-            return (
-              <div key={fav.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: i < profile.favorites.length - 1 ? 12 : 0 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 10, background: cfg.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Icon size={18} color={cfg.color} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: '0 0 5px' }}>{fav.name}</p>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <input type="text" value={fav.address} readOnly
-                      onClick={() => window.daum?.Postcode && new window.daum.Postcode({ oncomplete: d => updateFav(fav.id, 'address', d.roadAddress || d.jibunAddress) }).open()}
-                      placeholder="탭해서 주소 검색"
-                      style={{ ...inputSt, fontSize: 13, padding: '9px 12px', flex: 1, cursor: 'pointer', background: '#F8FAFC' }} />
-                    {fav.address && (
-                      <button onClick={() => updateFav(fav.id, 'address', '')}
-                        style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', cursor: 'pointer', color: '#94A3B8', fontSize: 14 }}>
-                        ×
-                      </button>
-                    )}
+        {/* 바로 출발 목적지 */}
+        <Card icon={<MapPin size={15} color="#0D9488" />} title="바로 출발 목적지">
+          <p style={{ color: '#64748B', fontSize: 14, fontWeight: 700, lineHeight: 1.5, margin: '0 0 12px' }}>
+            보호자가 등록한 장소는 홈 화면의 큰 바로 출발 카드로 보여요.
+          </p>
+          {quickStartPlaces.length ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {quickStartPlaces.map(place => (
+                <div key={place.id} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  border: '1.5px solid #CCFBF1',
+                  borderRadius: 16,
+                  background: '#F8FAFC',
+                  padding: '12px 13px',
+                }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 14, background: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+                    {place.icon}
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <p style={{ fontWeight: 900, fontSize: 16, color: '#0F172A', margin: 0 }}>{place.name}</p>
+                    <p style={{ color: '#0F766E', fontSize: 12, fontWeight: 900, margin: '3px 0 0' }}>{place.helper}</p>
+                    <p style={{
+                      color: '#64748B',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      lineHeight: 1.35,
+                      margin: '4px 0 0',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}>
+                      {place.address}
+                    </p>
                   </div>
                 </div>
-              </div>
-            )
-          })}
+              ))}
+            </div>
+          ) : (
+            <div style={{ border: '1.5px dashed #CBD5E1', borderRadius: 16, background: '#F8FAFC', padding: '16px 14px', textAlign: 'center' }}>
+              <p style={{ color: '#64748B', fontSize: 14, fontWeight: 800, lineHeight: 1.5, margin: 0 }}>
+                보호자 화면에서 목적지를 등록하면 여기에 표시돼요.
+              </p>
+            </div>
+          )}
         </Card>
 
         {/* 보호자 연결 영역 */}

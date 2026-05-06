@@ -88,7 +88,52 @@ function hasCoords(place) {
   return Number.isFinite(Number(place?.lat)) && Number.isFinite(Number(place?.lng))
 }
 
-function getRouteCriteria(route, index, routes = []) {
+function routeTransferCount(route) {
+  return (route?.busTransitCount || 0) + (route?.subwayTransitCount || 0)
+}
+
+function routePreferenceLabels(profile = {}) {
+  return [
+    !profile.allowStairs && '계단 없음',
+    profile.mobilityAid && '보조기구',
+    profile.preferLowFloorBus && '저상버스',
+    profile.preferElevator && '승강기',
+    profile.avoidTransfers && '환승 적게',
+    profile.needRestStops && '쉴 곳',
+    profile.slowPace && '천천히',
+  ].filter(Boolean)
+}
+
+function scoreRouteForProfile(route, profile = {}) {
+  if (!route) return Infinity
+  const walk = route.totalWalk || 0
+  const transfers = routeTransferCount(route)
+  const busSteps = route.steps?.filter(step => step.type === 'bus').length || 0
+  const subwaySteps = route.steps?.filter(step => step.type === 'subway').length || 0
+  let score = (route.totalTime || 999) + walk / 90 + transfers * 4
+
+  if (profile.avoidTransfers) score += transfers * 8
+  if (!profile.allowStairs || profile.preferElevator || profile.mobilityAid) {
+    score += subwaySteps * 3 + walk / 120
+  }
+  if (profile.mobilityAid || profile.slowPace) score += walk / 80
+  if (profile.needRestStops) score += walk / 140 + transfers * 2
+  if (profile.preferLowFloorBus) score += busSteps ? (route.pathType === 2 ? -3 : 0) : 6
+
+  return score
+}
+
+function applyRoutePreferences(routes, profile = {}) {
+  return [...routes]
+    .map((route, originalIndex) => ({
+      ...route,
+      preferenceScore: scoreRouteForProfile(route, profile),
+      originalIndex,
+    }))
+    .sort((a, b) => a.preferenceScore - b.preferenceScore || a.originalIndex - b.originalIndex)
+}
+
+function getRouteCriteria(route, index, routes = [], profile = {}) {
   const candidates = routes.filter(Boolean)
   if (!route || !candidates.length) {
     return { label: '추천 경로', short: '추천', desc: '시간과 이동 부담을 함께 본 경로', color: '#0D9488' }
@@ -97,10 +142,20 @@ function getRouteCriteria(route, index, routes = []) {
   const minTime = Math.min(...candidates.map(r => r.totalTime || Infinity))
   const minWalk = Math.min(...candidates.map(r => r.totalWalk ?? Infinity))
   const minFare = Math.min(...candidates.map(r => r.totalFare || Infinity))
-  const transferCount = route.busTransitCount + route.subwayTransitCount
-  const minTransfers = Math.min(...candidates.map(r => (r.busTransitCount || 0) + (r.subwayTransitCount || 0)))
+  const transferCount = routeTransferCount(route)
+  const minTransfers = Math.min(...candidates.map(routeTransferCount))
 
-  if (index === 0) return { label: '추천 경로', short: '추천', desc: '시간·도보·환승을 종합한 기본 추천', color: '#0D9488' }
+  if (index === 0) {
+    const labels = routePreferenceLabels(profile)
+    return {
+      label: '맞춤 추천 경로',
+      short: '맞춤 추천',
+      desc: labels.length
+        ? `설정한 이동 조건(${labels.slice(0, 3).join(', ')})을 먼저 반영한 경로`
+        : '시간·도보·환승을 종합한 기본 추천',
+      color: '#0D9488',
+    }
+  }
   if (route.totalTime === minTime) return { label: '최단 시간', short: '빠름', desc: '도착 시간이 가장 짧은 경로', color: '#2563EB' }
   if ((route.totalWalk ?? Infinity) === minWalk) return { label: '최소 도보', short: '적게 걷기', desc: '걷는 거리가 가장 짧은 경로', color: '#059669' }
   if (transferCount === minTransfers) return { label: '환승 적음', short: '간단', desc: '갈아타는 부담이 낮은 경로', color: '#D97706' }
@@ -316,9 +371,10 @@ export default function Route_() {
       )
     }
     if (routes?.length) {
-      setTransitRoutes(routes)
+      const rankedRoutes = applyRoutePreferences(routes, profile)
+      setTransitRoutes(rankedRoutes)
       // 첫 경로의 첫 버스 정류장 실시간 도착 조회
-      const firstBus = routes[0]?.firstBusStep
+      const firstBus = rankedRoutes[0]?.firstBusStep
       if (firstBus?.startStationId) {
         const busIds = firstBus.lines.map(l => l.busId).filter(Boolean)
         const real = await getRealtimeBusInfo(firstBus.startStationId, busIds)
@@ -374,7 +430,7 @@ export default function Route_() {
   const air = routeData?.airQuality
   const isLive = routeData?.coordsBased
   const bestRoute = transitRoutes?.[selectedRoute]
-  const selectedCriteria = getRouteCriteria(bestRoute, selectedRoute, transitRoutes || [])
+  const selectedCriteria = getRouteCriteria(bestRoute, selectedRoute, transitRoutes || [], profile)
   const hasExactRoute = Boolean(bestRoute?.steps?.length)
   const primaryTime = bestRoute?.totalTime || routeData?.duration
   const primaryWalk = bestRoute?.totalWalk ?? routeData?.walkDistance
@@ -688,7 +744,7 @@ export default function Route_() {
               <div style={{ padding: '10px 12px', borderBottom: '1px solid #F8FAFC' }}>
                 <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
                   {transitRoutes.map((r, i) => {
-                    const criteria = getRouteCriteria(r, i, transitRoutes)
+                    const criteria = getRouteCriteria(r, i, transitRoutes, profile)
                     const active = selectedRoute === i
                     return (
                       <button key={i} onClick={() => setSelectedRoute(i)} style={{

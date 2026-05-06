@@ -25,7 +25,7 @@ const SLIDES = [
     features: [
       { Icon: PhoneIcon, color: '#DC2626', bg: '#FEF2F2', text: '119 응급 신고 바로 연결' },
       { Icon: PhoneIcon, color: '#0D9488', bg: '#F0FDFA', text: '보호자 이동 현황 공유' },
-      { Icon: MapPin,    color: '#D97706', bg: '#FFFBEB', text: '자주 가는 곳 즐겨찾기' },
+      { Icon: MapPin,    color: '#D97706', bg: '#FFFBEB', text: '바로 출발 목적지' },
     ],
   },
   {
@@ -131,8 +131,8 @@ export default function Onboarding() {
             {[
               { label: '이름', desc: '맞춤 인사와 공유 메시지에 사용' },
               { label: '보호자 전화번호', desc: '응급 시 즉시 연결' },
-              { label: '이동 조건', desc: '계단·보행보조기구 여부' },
-              { label: '자주 가는 곳', desc: '홈 화면 빠른 경로에 표시' },
+              { label: '이동 조건', desc: '계단·환승·승강기·도보 부담 반영' },
+              { label: '바로 출발', desc: '보호자가 등록한 목적지를 홈에 표시' },
             ].map(({ label, desc }, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#F8F9FA', borderRadius: 14, padding: '13px 16px' }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#0D9488', flexShrink: 0 }} />
