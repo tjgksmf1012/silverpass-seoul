@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import BottomNav from '../components/BottomNav.jsx'
 import { ArrowLeft, UserIcon, PhoneIcon, WalkIcon, SettingsIcon,
          MapPin, CheckCircle, BuildingIcon } from '../components/Icons.jsx'
-import { getProfile, saveProfile, markVisited } from '../services/storage.js'
+import { createDefaultProfile, getProfile, saveProfile, markVisited } from '../services/storage.js'
 import { getKakaoUser } from '../services/kakaoAuth.js'
 import { getCurrentUser, signOut, getLinkedGuardian, syncElderProfileFromSupabase, syncGuardianProfileFromSupabase } from '../services/auth.js'
 
@@ -24,6 +24,14 @@ export default function Profile() {
     if (!currentUser?.id) return
     setProfile(p => {
       if (p.ownerId && String(p.ownerId) === String(currentUser.id)) return p
+      if (p.ownerId) {
+        return {
+          ...createDefaultProfile(),
+          ownerId: currentUser.id,
+          profileRole: currentUser.role || 'user',
+          ...(currentUser.name && { name: currentUser.name }),
+        }
+      }
       return {
         ...p,
         ownerId: currentUser.id,

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import BottomNav from '../components/BottomNav.jsx'
 import { SearchIcon, MicIcon, ChevronRight, ClockIcon,
          BuildingIcon, HospitalIcon, PillIcon, HomeIcon, WindIcon, MapPin } from '../components/Icons.jsx'
-import { getProfile, getHistory, saveProfile, normalizeFavorites } from '../services/storage.js'
+import { createDefaultProfile, getProfile, getHistory, saveProfile, normalizeFavorites } from '../services/storage.js'
 import { checkEmergency } from '../services/claude.js'
 import { searchPlaces } from '../services/kakaoSearch.js'
 import { getAirQuality } from '../services/seoulApi.js'
@@ -83,27 +83,27 @@ export default function Home() {
       getElderInfo(user.id).then(info => {
         const local = getProfile()
         const profileOwner = local.ownerId && String(local.ownerId) === String(user.id)
+        const baseLocal = local.ownerId && !profileOwner ? createDefaultProfile() : local
         const updated = {
-          ...local,
+          ...baseLocal,
           ownerId: user.id,
           profileRole: 'user',
-          name: profileOwner && local.name ? local.name : (user.name || local.name),
+          name: profileOwner && baseLocal.name ? baseLocal.name : (user.name || baseLocal.name),
         }
         if (!info) {
           saveProfile(updated)
           setProfile(updated)
+          setHistory(getHistory())
           return
         }
-        if (info.home_address) {
-          updated.homeAddress = info.home_address
-          updated.district = extractDistrict(info.home_address)
-        }
-        if (info.district && !info.home_address) updated.district = info.district
-        if (info.max_walk_min) updated.maxWalkMin = info.max_walk_min
-        if (info.allow_stairs != null) updated.allowStairs = info.allow_stairs
-        if (info.mobility_aid != null) updated.mobilityAid = info.mobility_aid
-        if (info.phone) updated.guardianPhone = info.phone
-        if (info.notes) updated.healthNotes = info.notes
+        updated.homeAddress = info.home_address || ''
+        updated.district = info.home_address ? extractDistrict(info.home_address) : (info.district || '종로구')
+        updated.maxWalkMin = info.max_walk_min || 20
+        updated.allowStairs = info.allow_stairs ?? false
+        updated.mobilityAid = info.mobility_aid ?? false
+        updated.guardianPhone = info.phone || ''
+        updated.healthNotes = info.notes || ''
+        updated.favorites = normalizeFavorites()
         if (info.frequent_places) {
           try {
             const favs = JSON.parse(info.frequent_places)
@@ -117,6 +117,7 @@ export default function Home() {
         }
         saveProfile(updated)
         setProfile(updated)
+        setHistory(getHistory())
       })
     }
   }, [])

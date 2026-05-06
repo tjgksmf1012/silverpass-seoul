@@ -4,7 +4,7 @@ import { getProfile, addHistory } from '../services/storage.js'
 import { getRouteData, getRealtimeSubwayArrival } from '../services/seoulApi.js'
 import { generateSubwayGuide } from '../services/claude.js'
 import { searchPlaces, findKnownSeoulPlace } from '../services/kakaoSearch.js'
-import { searchTransitRoute, getRealtimeBusInfo, formatArrivalTime, pathTypeIcon } from '../services/odsayApi.js'
+import { searchTransitRoute, getRealtimeBusInfo, formatArrivalTime, getTransitRouteIssue, pathTypeIcon } from '../services/odsayApi.js'
 import { getCurrentUser, getElderInfo, saveHistory, getLinkedGuardian } from '../services/auth.js'
 import { ArrowLeft, BusIcon, ElevatorIcon, WindIcon,
          ShelterIcon, AlertIcon, SearchIcon, MapPin } from '../components/Icons.jsx'
@@ -174,6 +174,7 @@ export default function Route_() {
   const [realtimeArrivals, setRealtimeArrivals] = useState(null)
   const [transitRoutes, setTransitRoutes] = useState(null)  // ODsay 경로
   const [realtimeBus, setRealtimeBus]     = useState(null)  // ODsay 버스 실시간
+  const [transitIssue, setTransitIssue]   = useState('')
   const [liveCoords, setLiveCoords]       = useState(null)
   const [selectedRoute, setSelectedRoute] = useState(0)     // 선택된 경로 인덱스
   const [healthNotes, setHealthNotes]     = useState('')
@@ -214,6 +215,7 @@ export default function Route_() {
     coordsApplied.current = false
     setTransitRoutes(null)
     setRealtimeBus(null)
+    setTransitIssue('')
     setSelectedRoute(0)
     setLiveCoords(null)
     setRouteData(prev => prev ? { ...prev, coordsBased: false, coordSource: null, startLabel: null, viaLabel: null } : prev)
@@ -349,6 +351,7 @@ export default function Route_() {
     setSelectedRoute(0)
     setTransitRoutes(null)
     setRealtimeBus(null)
+    setTransitIssue('')
 
     // 거리/시간 즉시 업데이트
     setRouteData(prev => prev ? {
@@ -380,6 +383,7 @@ export default function Route_() {
     if (routes?.length) {
       const rankedRoutes = applyRoutePreferences(routes, profile)
       setTransitRoutes(rankedRoutes)
+      setTransitIssue('')
       // 첫 경로의 첫 버스 정류장 실시간 도착 조회
       const firstBus = rankedRoutes[0]?.firstBusStep
       if (firstBus?.startStationId) {
@@ -389,6 +393,7 @@ export default function Route_() {
       }
     } else {
       setTransitRoutes(null)
+      setTransitIssue(getTransitRouteIssue())
     }
   }, [])
 
@@ -448,12 +453,14 @@ export default function Route_() {
   const startDisplay = manualStart?.name || routeData?.startLabel || '현재 위치'
   const routeBadge = hasExactRoute
     ? (isManualRoute ? '직접 지정 경로' : 'ODsay 실시간')
-    : (manualStart ? '좌표 기준 안내' : '위치 허용 필요')
+    : (transitIssue ? 'API 확인 필요' : (manualStart ? '좌표 기준 안내' : '위치 허용 필요'))
   const noExactTitle = manualStart
     ? '선택한 출발지 기준으로 안내 중이에요'
     : '정확한 정류장·환승 순서는 위치 허용 후 표시돼요'
   const noExactBody = manualStart
-    ? '정확한 대중교통 경로가 확인되면 정류장·환승 순서로 자동 보강돼요. 지금은 거리와 기본 이동 순서를 먼저 보여드려요.'
+    ? (transitIssue
+      ? `대중교통 경로 API 응답을 확인해야 해요. 현재는 출발지와 목적지 좌표 기준으로 기본 이동 순서만 보여드려요. (${transitIssue})`
+      : '정확한 대중교통 경로가 확인되면 정류장·환승 순서로 자동 보강돼요. 지금은 거리와 기본 이동 순서를 먼저 보여드려요.')
     : '현재는 기본 안내입니다. 위치를 허용하면 몇 분 걷고, 몇 번 버스나 어떤 지하철을 타는지 전체 순서로 바뀝니다.'
 
   const formatDistance = (meters) => {
@@ -504,7 +511,14 @@ export default function Route_() {
       meta: routeData?.walkDistance ? `약 ${formatDistance(routeData.walkDistance)}` : (manualStart ? '주소 기준' : '위치 필요'),
     }]
 
-    if (firstBus) {
+    if (transitIssue) {
+      steps.push({
+        type: 'walk',
+        title: '대중교통 경로 확인 필요',
+        detail: 'API 키나 권한이 정상화되면 버스 번호, 승차 정류장, 환승 순서가 이 자리에 표시돼요.',
+        meta: '확인 필요',
+      })
+    } else if (firstBus) {
       steps.push({
         type: 'bus',
         lines: [{ busNo: firstBus.busNo, typeLabel: firstBus.isLowFloor ? '저상버스' : '버스' }],

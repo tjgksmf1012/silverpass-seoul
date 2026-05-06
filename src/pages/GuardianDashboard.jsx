@@ -303,10 +303,8 @@ export default function GuardianDashboard() {
                         type="text"
                         value={elderInfo.homeAddress}
                         onChange={e => setElderInfo(p => ({ ...p, homeAddress: e.target.value }))}
-                        placeholder="주소 검색 버튼을 눌러주세요"
-                        readOnly
-                        className="input-base flex-1 bg-gray-50 cursor-pointer"
-                        onClick={() => openAddressSearch(addr => setElderInfo(p => ({ ...p, homeAddress: addr })))}
+                        placeholder="예: 서울 중구 세종대로 110"
+                        className="input-base flex-1 bg-white"
                       />
                       <button
                         type="button"
@@ -364,11 +362,17 @@ export default function GuardianDashboard() {
                             <input
                               type="text"
                               value={fav.address}
-                              readOnly
-                              placeholder="탭해서 주소 검색"
-                              className="input-base flex-1 min-w-0 text-xs py-2 cursor-pointer bg-white"
-                              onClick={() => openAddressSearch(addr => updateFavorite(fav.id, { address: addr }))}
+                              onChange={e => updateFavorite(fav.id, { address: e.target.value })}
+                              placeholder="주소를 직접 입력하거나 탭해서 검색"
+                              className="input-base flex-1 min-w-0 text-xs py-2 bg-white"
                             />
+                            <button
+                              type="button"
+                              onClick={() => openAddressSearch(addr => updateFavorite(fav.id, { address: addr }))}
+                              className="px-2.5 rounded-lg border border-brand-100 bg-brand-50 text-brand-700 text-xs font-bold flex-shrink-0"
+                            >
+                              검색
+                            </button>
                             {fav.address && (
                               <button
                                 type="button"
@@ -619,7 +623,7 @@ function GuardianToggle({ label, desc, value, onChange }) {
       <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-lg font-black ${
         active ? 'bg-brand-600 text-white' : 'bg-gray-100 text-transparent border border-gray-200'
       }`}>
-        ✓
+        {active ? '✓' : ''}
       </span>
       <span className="flex-1 min-w-0">
         <span className="block text-base font-black text-gray-900 leading-tight">{label}</span>

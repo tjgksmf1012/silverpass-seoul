@@ -11,6 +11,7 @@
 
 const API_KEY = import.meta.env.VITE_ODSAY_API_KEY?.trim()
 const BASE = 'https://api.odsay.com/v1/api'
+let lastTransitRouteIssue = ''
 
 // trafficType 숫자 → 텍스트
 const TRAFFIC_TYPE = { 1: 'subway', 2: 'bus', 3: 'walk' }
@@ -70,24 +71,46 @@ function compactPoints(points) {
  * @returns {TransitRoute[]}
  */
 export async function searchTransitRoute(sx, sy, ex, ey) {
-  if (!API_KEY) return null
+  if (!API_KEY) {
+    lastTransitRouteIssue = 'ODsay API 키가 설정되지 않았어요'
+    return null
+  }
 
   try {
+    lastTransitRouteIssue = ''
     const key = encodeURIComponent(API_KEY)
     const url = `${BASE}/searchPubTransPathT?SX=${sx}&SY=${sy}&EX=${ex}&EY=${ey}&apiKey=${key}&lang=0&output=json`
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) })
-    if (!res.ok) return null
+    if (!res.ok) {
+      lastTransitRouteIssue = `ODsay API HTTP ${res.status}`
+      return null
+    }
     const json = await res.json()
+    if (json?.error?.length) {
+      const message = json.error[0]?.message || ''
+      lastTransitRouteIssue = message.includes('ApiKeyAuthFailed')
+        ? 'ODsay API 키/권한 오류'
+        : (message || 'ODsay API 오류가 발생했어요')
+      return null
+    }
 
     const paths = asArray(json?.result?.path)
-    if (!paths.length) return null
+    if (!paths.length) {
+      lastTransitRouteIssue = '대중교통 경로를 찾지 못했어요'
+      return null
+    }
 
     // 최대 3개 경로 파싱
     return paths.slice(0, 3).map(parsePath)
   } catch (e) {
+    lastTransitRouteIssue = e?.message || '대중교통 API 연결에 실패했어요'
     console.warn('ODsay route error:', e)
     return null
   }
+}
+
+export function getTransitRouteIssue() {
+  return lastTransitRouteIssue
 }
 
 function parsePath(path) {

@@ -33,6 +33,14 @@ export const DEFAULT_PROFILE = {
   favorites: DEFAULT_FAVORITES,
 }
 
+export function createDefaultProfile(overrides = {}) {
+  return {
+    ...DEFAULT_PROFILE,
+    ...overrides,
+    favorites: normalizeFavorites(overrides.favorites || DEFAULT_PROFILE.favorites),
+  }
+}
+
 function favoriteId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return `custom_${crypto.randomUUID()}`
   return `custom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
@@ -83,11 +91,11 @@ export function normalizeFavorites(favorites = []) {
 export function getProfile() {
   try {
     const raw = localStorage.getItem(PROFILE_KEY)
-    if (!raw) return { ...DEFAULT_PROFILE, favorites: normalizeFavorites(DEFAULT_PROFILE.favorites) }
+    if (!raw) return createDefaultProfile()
     const parsed = JSON.parse(raw)
-    return { ...DEFAULT_PROFILE, ...parsed, favorites: normalizeFavorites(parsed.favorites) }
+    return createDefaultProfile(parsed)
   } catch {
-    return { ...DEFAULT_PROFILE, favorites: normalizeFavorites(DEFAULT_PROFILE.favorites) }
+    return createDefaultProfile()
   }
 }
 
@@ -107,18 +115,23 @@ function normalizeHistoryEntry(entry) {
   return { ...entry, destination: normalizeDestination(entry?.destination) }
 }
 
+function getHistoryStorageKey() {
+  const ownerId = getProfile().ownerId
+  return ownerId ? `${HISTORY_KEY}:${ownerId}` : HISTORY_KEY
+}
+
 export function addHistory(entry) {
   try {
     const nextEntry = normalizeHistoryEntry({ ...entry, timestamp: Date.now() })
     const history = getHistory().filter(item => item.destination !== nextEntry.destination)
     history.unshift(nextEntry)
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 20)))
+    localStorage.setItem(getHistoryStorageKey(), JSON.stringify(history.slice(0, 20)))
   } catch {}
 }
 
 export function getHistory() {
   try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]').map(normalizeHistoryEntry)
+    return JSON.parse(localStorage.getItem(getHistoryStorageKey()) ?? '[]').map(normalizeHistoryEntry)
   } catch {
     return []
   }
