@@ -6,31 +6,41 @@ export default function RoleSelect() {
   const navigate = useNavigate()
   const [selected, setSelected] = useState(null)
   const [loading, setLoading] = useState(false)
+  const currentUser = getCurrentUser()
+  const canUseGuardianRole = currentUser && currentUser.provider !== 'guest' && currentUser.provider !== 'invite'
 
   const roles = [
     {
       id: 'user',
-      emoji: '👴',
-      title: '어르신',
-      desc: '경로 안내를 받고\n싶어요',
+      emoji: '🧭',
+      title: '길찾기 사용자',
+      desc: '내 조건에 맞는\n경로 안내를 받을게요',
       color: 'border-brand-500 bg-brand-50',
       activeColor: 'border-brand-600 bg-brand-100 ring-2 ring-brand-400',
     },
-    {
+    canUseGuardianRole ? {
       id: 'guardian',
       emoji: '👨‍👩‍👧',
       title: '보호자',
       desc: '어르신의 이동을\n함께 확인하고 싶어요',
       color: 'border-purple-300 bg-purple-50',
       activeColor: 'border-purple-500 bg-purple-100 ring-2 ring-purple-400',
-    },
-  ]
+    } : null,
+  ].filter(Boolean)
 
   async function handleConfirm() {
     if (!selected) return
     setLoading(true)
     try {
       const user = getCurrentUser()
+      if (!user) {
+        navigate('/login', { replace: true })
+        return
+      }
+      if (selected === 'guardian' && (user.provider === 'guest' || user.provider === 'invite')) {
+        navigate('/login', { replace: true })
+        return
+      }
       await setRole(user.id, selected)
       navigate(selected === 'guardian' ? '/guardian' : '/', { replace: true })
     } finally {
@@ -42,10 +52,10 @@ export default function RoleSelect() {
     <div className="min-h-screen bg-cream-50 flex flex-col items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm">
         <h1 className="text-3xl font-bold text-gray-900 text-center mb-2">
-          어떤 분이세요?
+          어떻게 사용할까요?
         </h1>
         <p className="text-center text-gray-500 text-senior mb-10">
-          역할에 맞는 화면을 보여드려요
+          사용 목적에 맞는 화면을 보여드려요
         </p>
 
         <div className="space-y-4 mb-10">

@@ -16,7 +16,8 @@ export default function Profile() {
   const kakaoUser = getKakaoUser()
   const currentUser = getCurrentUser()
   const provider = currentUser?.provider
-  const isElderly = provider === 'invite' || provider === 'guest'
+  const isGuardian = currentUser?.role === 'guardian'
+  const isRouteUser = !isGuardian
   const [linkedGuardian, setLinkedGuardian] = useState(null)
 
   useEffect(() => {
@@ -34,13 +35,13 @@ export default function Profile() {
 
   useEffect(() => {
     if (!currentUser?.id) return
-    if (isElderly) {
+    if (isRouteUser) {
       getLinkedGuardian(currentUser.id).then(setLinkedGuardian)
       syncElderProfileFromSupabase(currentUser.id).then(() => setProfile(getProfile()))
     } else {
       syncGuardianProfileFromSupabase(currentUser.id).then(() => setProfile(getProfile()))
     }
-  }, [isElderly, currentUser?.id])
+  }, [isRouteUser, currentUser?.id])
 
   function update(key, val)  { setProfile(p => ({ ...p, [key]: val })); setSaved(false) }
   const quickStartPlaces = [
@@ -108,7 +109,7 @@ export default function Profile() {
             /* 게스트 (비로그인) */
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#F0FDFA', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>👴</div>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#F0FDFA', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🧭</div>
                 <div>
                   <p style={{ fontWeight: 800, fontSize: 15, color: '#0F172A', margin: 0 }}>비로그인 상태</p>
                   <p style={{ fontSize: 12, color: '#94A3B8', margin: '2px 0 0' }}>계정 없이 사용 중이에요</p>
@@ -155,8 +156,8 @@ export default function Profile() {
           </Card>
         )}
 
-        {/* 보호자 전화번호 - 어르신만 표시 */}
-        {isElderly && (
+        {/* 보호자 전화번호 - 길찾기 사용자에게만 표시 */}
+        {isRouteUser && (
           <Card icon={<PhoneIcon size={15} color="#0D9488" />} title="보호자 전화번호">
             <input type="tel" value={profile.guardianPhone} onChange={e => update('guardianPhone', e.target.value)}
               placeholder="010-0000-0000" style={inputSt} />
@@ -297,7 +298,7 @@ export default function Profile() {
         </Card>
 
         {/* 보호자 연결 영역 */}
-        {isElderly ? (
+        {isRouteUser ? (
           <div style={{ background: '#fff', borderRadius: 16, padding: '15px 16px', border: '1.5px solid #F1F5F9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
               <div style={{ width: 26, height: 26, borderRadius: 7, background: '#F0FDFA', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>👨‍👩‍👧</div>

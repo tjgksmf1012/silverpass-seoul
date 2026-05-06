@@ -32,6 +32,10 @@ function getRole() {
   return localStorage.getItem(ROLE_KEY)
 }
 
+function isGuardianAccount(user) {
+  return user?.role === 'guardian' && user.provider !== 'guest' && user.provider !== 'invite'
+}
+
 function PageLoading() {
   return (
     <div style={{
@@ -69,14 +73,21 @@ function RequireAuth({ children }) {
 function RequireElder({ children }) {
   const user = getCurrentUser()
   if (!user) return <Navigate to="/login" replace />
-  if (getRole() === 'guardian') return <Navigate to="/guardian" replace />
+  if (isGuardianAccount(user)) return <Navigate to="/guardian" replace />
+  return children
+}
+
+function RequireGuardian({ children }) {
+  const user = getCurrentUser()
+  if (!user) return <Navigate to="/login" replace />
+  if (!isGuardianAccount(user)) return <Navigate to="/" replace />
   return children
 }
 
 function HomeRoute() {
   const user = getCurrentUser()
   if (!user) return <Navigate to="/login" replace />
-  if (getRole() === 'guardian') return <Navigate to="/guardian" replace />
+  if (isGuardianAccount(user)) return <Navigate to="/guardian" replace />
   if (isFirstVisit()) return <Navigate to="/onboarding" replace />
   return <Home />
 }
@@ -88,7 +99,7 @@ export default function App() {
 
   useEffect(() => {
     const user = getCurrentUser()
-    if (user && getRole() === 'user') {
+    if (user && !isGuardianAccount(user)) {
       import('./services/auth.js')
         .then(({ syncElderProfileFromSupabase }) => syncElderProfileFromSupabase(user.id))
         .catch(() => {})
@@ -118,7 +129,7 @@ export default function App() {
           <Route path="/emergency"   element={<RequireAuth><Emergency /></RequireAuth>} />
 
           {/* 보호자 대시보드 (선택적) */}
-          <Route path="/guardian"    element={<RequireAuth><GuardianDashboard /></RequireAuth>} />
+          <Route path="/guardian"    element={<RequireGuardian><GuardianDashboard /></RequireGuardian>} />
 
           {/* 어르신 초대 링크 (로그인 불필요) */}
           <Route path="/invite/:code" element={<InviteOnboarding />} />

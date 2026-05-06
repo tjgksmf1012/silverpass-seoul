@@ -426,31 +426,22 @@ export default function GuardianDashboard() {
                     </div>
                   </div>
                   <div className="space-y-3">
-                    <label className="text-xs font-semibold text-gray-500 block">이동 조건</label>
-                    <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800">계단 이용 가능</p>
-                        <p className="text-xs text-gray-400">계단 있는 경로도 안내</p>
-                      </div>
-                      <button type="button"
-                        onClick={() => setElderInfo(p => ({ ...p, allowStairs: !p.allowStairs }))}
-                        className={`w-12 h-6 rounded-full transition-colors relative ${elderInfo.allowStairs ? 'bg-brand-500' : 'bg-gray-300'}`}
-                      >
-                        <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${elderInfo.allowStairs ? 'translate-x-6' : 'translate-x-0.5'}`} />
-                      </button>
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 block">이동 조건</label>
+                      <p className="text-xs text-gray-400 mt-1">보호자가 저장한 조건은 길찾기 추천 기준에 반영돼요.</p>
                     </div>
-                    <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800">보행보조기구 사용</p>
-                        <p className="text-xs text-gray-400">휠체어, 워커, 지팡이 등</p>
-                      </div>
-                      <button type="button"
-                        onClick={() => setElderInfo(p => ({ ...p, mobilityAid: !p.mobilityAid }))}
-                        className={`w-12 h-6 rounded-full transition-colors relative ${elderInfo.mobilityAid ? 'bg-brand-500' : 'bg-gray-300'}`}
-                      >
-                        <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${elderInfo.mobilityAid ? 'translate-x-6' : 'translate-x-0.5'}`} />
-                      </button>
-                    </div>
+                    <GuardianToggle
+                      label="계단 없는 길 우선"
+                      desc="엘리베이터와 완만한 길을 먼저 안내"
+                      value={!elderInfo.allowStairs}
+                      onChange={v => setElderInfo(p => ({ ...p, allowStairs: !v }))}
+                    />
+                    <GuardianToggle
+                      label="보행보조기구 사용"
+                      desc="휠체어, 워커, 지팡이 등을 고려"
+                      value={elderInfo.mobilityAid}
+                      onChange={v => setElderInfo(p => ({ ...p, mobilityAid: v }))}
+                    />
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-gray-500 mb-1 block">메모</label>
@@ -608,6 +599,38 @@ export default function GuardianDashboard() {
         )}
       </div>
     </div>
+  )
+}
+
+function GuardianToggle({ label, desc, value, onChange }) {
+  const active = Boolean(value)
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={active}
+      onClick={() => onChange(!active)}
+      className={`w-full min-h-[76px] rounded-2xl border px-3.5 py-3 flex items-center gap-3 text-left transition-all active:scale-[0.99] ${
+        active
+          ? 'bg-brand-50 border-brand-200 shadow-sm'
+          : 'bg-white border-gray-200'
+      }`}
+    >
+      <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-lg font-black ${
+        active ? 'bg-brand-600 text-white' : 'bg-gray-100 text-transparent border border-gray-200'
+      }`}>
+        ✓
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-base font-black text-gray-900 leading-tight">{label}</span>
+        <span className="block text-xs font-semibold text-gray-500 mt-1 leading-snug">{desc}</span>
+      </span>
+      <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${
+        active ? 'bg-brand-100 text-brand-700' : 'bg-gray-100 text-gray-500'
+      }`}>
+        {active ? '켜짐' : '꺼짐'}
+      </span>
+    </button>
   )
 }
 
