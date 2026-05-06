@@ -111,6 +111,10 @@ function normalizeDestination(destination) {
   return destination.replace(/^"(.+)" 바로 이동$/, '$1')
 }
 
+function isValidDestination(destination) {
+  return typeof destination === 'string' && destination.trim() && !['목적지', '알 수 없음'].includes(destination.trim())
+}
+
 function normalizeHistoryEntry(entry) {
   return { ...entry, destination: normalizeDestination(entry?.destination) }
 }
@@ -123,6 +127,7 @@ function getHistoryStorageKey() {
 export function addHistory(entry) {
   try {
     const nextEntry = normalizeHistoryEntry({ ...entry, timestamp: Date.now() })
+    if (!isValidDestination(nextEntry.destination)) return
     const history = getHistory().filter(item => item.destination !== nextEntry.destination)
     history.unshift(nextEntry)
     localStorage.setItem(getHistoryStorageKey(), JSON.stringify(history.slice(0, 20)))
@@ -131,7 +136,9 @@ export function addHistory(entry) {
 
 export function getHistory() {
   try {
-    return JSON.parse(localStorage.getItem(getHistoryStorageKey()) ?? '[]').map(normalizeHistoryEntry)
+    return JSON.parse(localStorage.getItem(getHistoryStorageKey()) ?? '[]')
+      .map(normalizeHistoryEntry)
+      .filter(item => isValidDestination(item.destination))
   } catch {
     return []
   }

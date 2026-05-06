@@ -114,6 +114,11 @@ export default function GuardianDashboard() {
     navigate('/login', { replace: true })
   }
 
+  function openInfoEditor() {
+    setEditingInfo(true)
+    setInfoSaved(false)
+  }
+
   async function handleReloginCode() {
     if (!linkedUser) return
     setReloginLoading(true)
@@ -235,14 +240,14 @@ export default function GuardianDashboard() {
 
               <div className="grid grid-cols-2 gap-3 mt-4">
                 <button
-                  onClick={() => navigate('/emergency')}
-                  className="flex items-center justify-center gap-2 bg-red-50 text-red-600 font-semibold rounded-2xl py-3 active:scale-95 transition-all"
+                  onClick={openInfoEditor}
+                  className="flex items-center justify-center gap-2 bg-brand-50 text-brand-700 font-semibold rounded-2xl py-3 active:scale-95 transition-all"
                 >
-                  <span className="text-lg">🚨</span> 응급신고
+                  <span className="text-lg">✏️</span> 정보 수정
                 </button>
                 <button
                   onClick={loadLinkedUser}
-                  className="flex items-center justify-center gap-2 bg-brand-50 text-brand-700 font-semibold rounded-2xl py-3 active:scale-95 transition-all"
+                  className="flex items-center justify-center gap-2 bg-slate-50 text-slate-700 font-semibold rounded-2xl py-3 active:scale-95 transition-all"
                 >
                   <span className="text-lg">🔄</span> 새로고침
                 </button>

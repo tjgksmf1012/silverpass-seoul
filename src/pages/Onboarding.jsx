@@ -46,7 +46,7 @@ export default function Onboarding() {
   function next() {
     if (isLast) {
       markVisited()
-      navigate('/profile')
+      navigate('/')
     } else {
       setStep(s => s + 1)
     }
@@ -125,14 +125,14 @@ export default function Onboarding() {
           </div>
         )}
 
-        {/* 마지막 슬라이드 - 프로필 설정 안내 */}
+        {/* 마지막 슬라이드 - 보호자 설정 안내 */}
         {isLast && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
-              { label: '이름', desc: '맞춤 인사와 공유 메시지에 사용' },
-              { label: '보호자 전화번호', desc: '응급 시 즉시 연결' },
-              { label: '이동 조건', desc: '계단·환승·승강기·도보 부담 반영' },
-              { label: '바로 출발', desc: '보호자가 등록한 목적지를 홈에 표시' },
+              { label: '바로 길찾기', desc: '목적지를 말하거나 입력하면 바로 안내' },
+              { label: '가까운 곳 찾기', desc: '복지관·병원·약국을 현재 기준으로 검색' },
+              { label: '보호자 등록', desc: '보호자가 집·자주 가는 곳을 대신 설정' },
+              { label: '응급 연결', desc: '119와 보호자 전화로 빠르게 연결' },
             ].map(({ label, desc }, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#F8F9FA', borderRadius: 14, padding: '13px 16px' }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#0D9488', flexShrink: 0 }} />
@@ -154,11 +154,11 @@ export default function Onboarding() {
           color: '#fff', fontWeight: 800, fontSize: 17, cursor: 'pointer',
           boxShadow: '0 4px 16px rgba(13,148,136,0.3)',
         }}>
-          {isLast ? '프로필 설정하러 가기' : step === SLIDES.length - 2 ? '마지막 단계' : '다음'}
+          {isLast ? '바로 시작하기' : step === SLIDES.length - 2 ? '마지막 단계' : '다음'}
         </button>
         {isLast && (
-          <button onClick={skip} style={{ background: 'none', border: 'none', color: '#94A3B8', fontWeight: 600, fontSize: 14, cursor: 'pointer', padding: '8px 0' }}>
-            나중에 설정할게요. 바로 시작
+          <button onClick={() => { markVisited(); navigate('/profile') }} style={{ background: 'none', border: 'none', color: '#0D9488', fontWeight: 800, fontSize: 14, cursor: 'pointer', padding: '8px 0' }}>
+            내 이동 조건을 직접 설정할게요
           </button>
         )}
       </div>

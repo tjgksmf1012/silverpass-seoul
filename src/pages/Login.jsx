@@ -20,7 +20,6 @@ export default function Login() {
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [signupRole, setSignupRole] = useState('user')
 
   function goHome() {
     const role = getRole()
@@ -63,7 +62,7 @@ export default function Login() {
     setLoading(true); setError('')
     try {
       const { signUpWithEmail } = await import('../services/auth.js')
-      await signUpWithEmail(email, password, name.trim(), phone.trim(), signupRole)
+      await signUpWithEmail(email, password, name.trim(), phone.trim(), 'guardian')
       goHome()
     }
     catch (e) { setError(e.message) }
@@ -73,8 +72,9 @@ export default function Login() {
   async function handleKakao() {
     setLoading(true); setError('')
     try {
-      const { signIn } = await import('../services/auth.js')
-      await signIn()
+      const { signIn, setRole } = await import('../services/auth.js')
+      const user = await signIn()
+      if (!getRole() && user?.id) await setRole(user.id, 'guardian')
       goHome()
     }
     catch (e) { setError(e.message || '카카오 로그인에 실패했어요') }
@@ -112,11 +112,11 @@ export default function Login() {
               </span>
               <div className="text-left">
                 <p className="text-lg font-bold text-gray-900">어르신</p>
-                <p className="text-sm text-gray-500">보호자 초대 코드가 있으면 연결하고, 없어도 바로 시작해요</p>
+                <p className="text-sm text-gray-500">복잡한 가입 없이 바로 길 안내를 시작해요</p>
               </div>
             </button>
 
-            {/* 계정 로그인 */}
+            {/* 보호자 */}
             <button
               onClick={() => { setStep('login'); setError('') }}
               className="w-full flex items-center gap-4 p-5 bg-white rounded-3xl border-2 border-gray-200 hover:border-gray-400 transition-all active:scale-95 shadow-sm"
@@ -125,8 +125,8 @@ export default function Login() {
                 <UsersIcon size={32} color="#7C3AED" stroke={2.1} />
               </span>
               <div className="text-left">
-                <p className="text-lg font-bold text-gray-900">계정 로그인</p>
-                <p className="text-sm text-gray-500">어르신 또는 보호자 계정으로 들어가요</p>
+                <p className="text-lg font-bold text-gray-900">보호자</p>
+                <p className="text-sm text-gray-500">어르신을 초대하고 자주 가는 곳을 등록해요</p>
               </div>
             </button>
           </>
@@ -140,13 +140,13 @@ export default function Login() {
             </button>
             <div className="text-center">
               <p className="text-2xl font-bold text-gray-900">안녕하세요!</p>
-              <p className="text-gray-500 text-senior mt-1">보호자님께 받은 코드를 입력해주세요</p>
+              <p className="text-gray-500 text-senior mt-1">초대 코드가 있으면 입력하고, 없어도 바로 시작해요</p>
             </div>
             <input
               type="text"
               value={inviteCode}
               onChange={e => setInviteCode(e.target.value.toUpperCase())}
-              placeholder="초대 코드 (예: AB12CD)"
+              placeholder="초대 코드 선택 입력"
               maxLength={8}
               className="input-base text-2xl py-5 text-center tracking-widest font-mono uppercase"
               autoFocus
@@ -157,9 +157,9 @@ export default function Login() {
               disabled={loading}
               className="w-full btn-primary py-4 text-xl rounded-2xl disabled:opacity-40"
             >
-              {loading ? '시작 중...' : '시작하기'}
+              {loading ? '시작 중...' : (inviteCode.trim() ? '보호자와 연결하고 시작' : '코드 없이 바로 시작')}
             </button>
-            <p className="text-center text-xs text-gray-400">코드 없이도 바로 시작할 수 있어요</p>
+            <p className="text-center text-xs text-gray-400">보호자 연결은 나중에도 할 수 있어요</p>
           </div>
         )}
 
@@ -194,30 +194,14 @@ export default function Login() {
               </form>
             ) : (
               <form onSubmit={handleEmailSignup} className="space-y-3">
-                {/* 역할 선택 */}
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: 'user', Icon: SeniorIcon, color: '#0D9488', label: '어르신', sub: '내 이동 조건으로 길찾기' },
-                    { id: 'guardian', Icon: UsersIcon, color: '#7C3AED', label: '보호자', sub: '어르신 관리·모니터링' },
-                  ].map(r => {
-                    const Icon = r.Icon
-                    const selected = signupRole === r.id
-                    return (
-                    <button key={r.id} type="button" onClick={() => setSignupRole(r.id)}
-                      className={`p-3 rounded-2xl border-2 text-left transition-all active:scale-95 ${
-                        selected
-                          ? 'border-brand-500 bg-brand-50'
-                          : 'border-gray-200 bg-white'
-                      }`}
-                    >
-                      <span className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-gray-50">
-                        <Icon size={21} color={selected ? r.color : '#64748B'} stroke={2.1} />
-                      </span>
-                      <p className={`text-sm font-bold ${selected ? 'text-brand-700' : 'text-gray-800'}`}>{r.label}</p>
-                      <p className="text-xs text-gray-400">{r.sub}</p>
-                    </button>
-                    )
-                  })}
+                <div className="flex items-center gap-3 rounded-2xl border-2 border-purple-100 bg-purple-50 p-4">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white">
+                    <UsersIcon size={24} color="#7C3AED" stroke={2.1} />
+                  </span>
+                  <div>
+                    <p className="text-sm font-bold text-purple-800">보호자 계정으로 가입해요</p>
+                    <p className="text-xs font-semibold text-purple-500">가입 후 어르신 초대 링크를 만들 수 있어요</p>
+                  </div>
                 </div>
                 <input type="text" placeholder="이름" value={name} onChange={e => setName(e.target.value)} required className="input-base" />
                 <input type="email" placeholder="이메일" value={email} onChange={e => setEmail(e.target.value)} required className="input-base" />

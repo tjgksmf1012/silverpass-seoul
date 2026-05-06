@@ -6,11 +6,9 @@ import { isFirstVisit } from './services/storage.js'
 const Home = lazy(() => import('./pages/Home.jsx'))
 const Profile = lazy(() => import('./pages/Profile.jsx'))
 const Route_ = lazy(() => import('./pages/Route.jsx'))
-const Share = lazy(() => import('./pages/Share.jsx'))
 const Emergency = lazy(() => import('./pages/Emergency.jsx'))
 const Onboarding = lazy(() => import('./pages/Onboarding.jsx'))
 const Login = lazy(() => import('./pages/Login.jsx'))
-const RoleSelect = lazy(() => import('./pages/RoleSelect.jsx'))
 const GuardianDashboard = lazy(() => import('./pages/GuardianDashboard.jsx'))
 const InviteOnboarding = lazy(() => import('./pages/InviteOnboarding.jsx'))
 const NotFound = lazy(() => import('./pages/NotFound.jsx'))
@@ -118,14 +116,14 @@ export default function App() {
         <Routes>
           {/* 인증 */}
           <Route path="/login"       element={<Login />} />
-          <Route path="/role-select" element={<RoleSelect />} />
+          <Route path="/role-select" element={<Navigate to="/login" replace />} />
 
           {/* 어르신 앱 */}
           <Route path="/"            element={<HomeRoute />} />
           <Route path="/onboarding"  element={<RequireElder><Onboarding /></RequireElder>} />
           <Route path="/profile"     element={<RequireElder><Profile /></RequireElder>} />
           <Route path="/route"       element={<RequireElder><Route_ /></RequireElder>} />
-          <Route path="/share"       element={<RequireElder><Share /></RequireElder>} />
+          <Route path="/share"       element={<Navigate to="/" replace />} />
           <Route path="/emergency"   element={<RequireAuth><Emergency /></RequireAuth>} />
 
           {/* 보호자 대시보드 (선택적) */}

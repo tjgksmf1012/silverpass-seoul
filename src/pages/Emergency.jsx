@@ -37,7 +37,6 @@ export default function Emergency() {
       window.location.href = `tel:${profile.guardianPhone.replace(/-/g, '')}`
     } else {
       showToast('보호자 전화번호가 설정되어 있지 않아요')
-      setTimeout(() => navigate('/profile'), 1500)
     }
   }
 
@@ -60,7 +59,7 @@ export default function Emergency() {
         <div style={{ position: 'absolute', bottom: -30, left: -20, width: 130, height: 130, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
 
         {/* 뒤로가기 */}
-        <button onClick={() => navigate('/')} style={{ position: 'absolute', top: 52, left: 16, width: 38, height: 38, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }}>
+        <button onClick={() => navigate('/')} aria-label="홈으로 돌아가기" style={{ position: 'absolute', top: 52, left: 16, width: 38, height: 38, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }}>
           <ArrowLeft size={18} color="#fff" />
         </button>
 
@@ -125,6 +124,17 @@ export default function Emergency() {
             </p>
           </div>
         </button>
+
+        {!profile.guardianPhone && (
+          <button onClick={() => navigate('/profile')} style={{
+            width: '100%', border: '1.5px solid #E2E8F0', borderRadius: 16, padding: '15px 0',
+            background: '#F8FAFC', color: '#0F172A', fontWeight: 800, fontSize: 15, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            fontFamily: 'inherit',
+          }}>
+            보호자 전화번호 등록하기
+          </button>
+        )}
 
         {/* 근처 응급의료기관 */}
         {hospitals.length > 0 && (

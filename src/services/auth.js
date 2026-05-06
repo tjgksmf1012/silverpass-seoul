@@ -290,6 +290,7 @@ export async function saveHistory(userId, { destination, burden, duration }) {
   const normalizedDestination = typeof destination === 'string'
     ? destination.replace(/^"(.+)" 바로 ?이동$/, '$1')
     : destination
+  if (!normalizedDestination || ['목적지', '알 수 없음'].includes(String(normalizedDestination).trim())) return
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('id')
