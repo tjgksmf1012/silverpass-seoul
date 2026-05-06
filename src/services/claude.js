@@ -29,11 +29,20 @@ async function callClaude(action, payload) {
   return data.result
 }
 
+function logClaudeFallback(label, err) {
+  const message = err?.message || String(err)
+  if (import.meta.env.DEV && message.includes('Claude proxy HTTP 404')) {
+    console.debug(`${label} fallback: local API proxy is unavailable in Vite dev`)
+    return
+  }
+  console.warn(`${label} fallback:`, err)
+}
+
 export async function parseUserQuery(query, profile) {
   try {
     return await callClaude('parseUserQuery', { query, profile })
   } catch (err) {
-    console.warn('Claude parse fallback:', err)
+    logClaudeFallback('Claude parse', err)
     return getMockRouteRecommendation(query, profile)
   }
 }
@@ -42,7 +51,7 @@ export async function generateRouteExplanation(routeData, profile) {
   try {
     return await callClaude('generateRouteExplanation', { routeData, profile })
   } catch (err) {
-    console.warn('Claude explain fallback:', err)
+    logClaudeFallback('Claude explain', err)
     return getMockExplanation(routeData, profile)
   }
 }
@@ -51,7 +60,7 @@ export async function generateSubwayGuide(destination) {
   try {
     return await callClaude('generateSubwayGuide', { destination })
   } catch (err) {
-    console.warn('Subway guide fallback:', err)
+    logClaudeFallback('Subway guide', err)
     return getMockSubwayGuide(destination)
   }
 }

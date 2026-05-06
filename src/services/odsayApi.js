@@ -23,6 +23,11 @@ const BUS_TYPE_LABEL = {
   11: '간선', 12: '지선', 13: '순환', 14: '광역', 15: '급행간선',
 }
 
+function asArray(value) {
+  if (!value) return []
+  return Array.isArray(value) ? value : [value]
+}
+
 // ─── 경로 탐색 ────────────────────────────────────────────────────────────────
 /**
  * @param {number} sx 출발지 경도 (lng)
@@ -41,8 +46,8 @@ export async function searchTransitRoute(sx, sy, ex, ey) {
     if (!res.ok) return null
     const json = await res.json()
 
-    const paths = json?.result?.path
-    if (!paths?.length) return null
+    const paths = asArray(json?.result?.path)
+    if (!paths.length) return null
 
     // 최대 3개 경로 파싱
     return paths.slice(0, 3).map(parsePath)
@@ -54,15 +59,27 @@ export async function searchTransitRoute(sx, sy, ex, ey) {
 
 function parsePath(path) {
   const info = path.info || {}
-  const subPaths = path.subPath || []
+  const subPaths = asArray(path.subPath)
 
-  // 이동 수단 섹션만 추출 (도보 제외)
-  const transitSteps = subPaths
-    .filter(s => s.trafficType !== 3)
-    .map(s => {
+  // 도보까지 포함한 전체 이동 순서
+  const steps = subPaths
+    .map((s, index) => {
+      if (s.trafficType === 3) {
+        const distance = s.distance || 0
+        return {
+          type: 'walk',
+          distance,
+          sectionTime: s.sectionTime || Math.max(1, Math.ceil(distance / 65)),
+          startName: s.startName || '',
+          endName: s.endName || '',
+          index,
+        }
+      }
+
       if (s.trafficType === 2) {
         // 버스
-        const lanes = s.lane || []
+        const lanes = asArray(s.lane)
+        const stations = asArray(s.passStopList?.stations)
         return {
           type: 'bus',
           lines: lanes.map(l => ({
@@ -75,12 +92,13 @@ function parsePath(path) {
           endName: s.endName || '',
           stationCount: s.stationCount || 0,
           sectionTime: s.sectionTime || 0,
-          startStationId: s.passStopList?.stations?.[0]?.stationID || null,
-          startStationName: s.passStopList?.stations?.[0]?.stationName || s.startName || '',
+          startStationId: stations[0]?.stationID || null,
+          startStationName: stations[0]?.stationName || s.startName || '',
+          index,
         }
       } else {
         // 지하철
-        const lanes = s.lane || []
+        const lanes = asArray(s.lane)
         return {
           type: 'subway',
           lines: lanes.map(l => ({
@@ -94,13 +112,15 @@ function parsePath(path) {
           sectionTime: s.sectionTime || 0,
           way: s.way || '',
           wayCode: s.wayCode,
+          index,
         }
       }
     })
+    .filter(step => step.type !== 'walk' || step.distance > 0 || step.sectionTime > 0)
 
   // 도보 구간 정리
-  const walkSteps = subPaths
-    .filter(s => s.trafficType === 3)
+  const walkSteps = steps
+    .filter(s => s.type === 'walk')
     .reduce((acc, s) => acc + (s.distance || 0), 0)
 
   return {
@@ -112,9 +132,9 @@ function parsePath(path) {
     totalFare: info.payment || info.cashPayment || 0,
     busTransitCount: info.busTransitCount || 0,
     subwayTransitCount: info.subwayTransitCount || 0,
-    steps: transitSteps,
+    steps,
     // 첫 번째 탑승 정류장 (버스 실시간 조회에 사용)
-    firstBusStep: transitSteps.find(s => s.type === 'bus') || null,
+    firstBusStep: steps.find(s => s.type === 'bus') || null,
   }
 }
 
@@ -134,8 +154,8 @@ export async function getRealtimeBusInfo(stationId, busIds = []) {
     if (!res.ok) return null
     const json = await res.json()
 
-    const real = json?.result?.real
-    if (!real?.length) return null
+    const real = asArray(json?.result?.real)
+    if (!real.length) return null
 
     return real.map(r => ({
       busNo: r.busNo || '',
