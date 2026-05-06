@@ -350,7 +350,15 @@ export default function Route_() {
           getRouteData(destination, profileWithNotes, null),
           generateSubwayGuide(destination),
         ])
-        setRouteData(data)
+        setRouteData(prev => prev?.coordsBased ? {
+          ...data,
+          walkDistance: prev.walkDistance,
+          duration: prev.duration,
+          coordsBased: true,
+          coordSource: prev.coordSource,
+          startLabel: prev.startLabel,
+          viaLabel: prev.viaLabel,
+        } : data)
         setSubwayGuide(subway)
         addHistory({ destination, duration: data.duration, burden: data.burden })
         const canAutoShare = user?.id && !String(user.id).startsWith('guest_')

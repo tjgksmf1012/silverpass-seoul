@@ -76,6 +76,14 @@ function routeStepLabel(step) {
 function stepOverlayHtml(step, index, active) {
   const style = STEP_STYLE[step?.type] || STEP_STYLE.walk
   const label = routeStepLabel(step)
+  if (!active) {
+    return `
+      <div style="width:26px;height:26px;border-radius:999px;background:#fff;color:${style.color};border:3px solid ${style.color};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;font-family:'Pretendard Variable','맑은 고딕',sans-serif;box-shadow:0 5px 12px rgba(15,23,42,0.18);">
+        ${index + 1}
+      </div>
+    `
+  }
+
   return `
     <div style="display:flex;align-items:center;gap:6px;filter:drop-shadow(0 5px 12px rgba(15,23,42,0.24));">
       <div style="width:28px;height:28px;border-radius:999px;background:${active ? style.color : '#fff'};color:${active ? '#fff' : style.color};border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;font-family:'Pretendard Variable','맑은 고딕',sans-serif;">${index + 1}</div>
@@ -96,23 +104,17 @@ function stationDotHtml(step, name, active) {
   `
 }
 
-function stepEndOverlayHtml(step) {
+function stepEndOverlayHtml(step, nextStep) {
   const style = STEP_STYLE[step?.type] || STEP_STYLE.walk
-  const label = step?.type === 'bus' ? '내릴 곳' : step?.type === 'subway' ? '내릴 역' : '도보 끝'
+  let label = '도착'
+  if (step?.type === 'bus') label = '내릴 곳'
+  else if (step?.type === 'subway') label = '내릴 역'
+  else if (nextStep?.type === 'bus') label = '버스 타는 곳'
+  else if (nextStep?.type === 'subway') label = '지하철 타는 곳'
   return `
     <div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 4px 10px rgba(15,23,42,0.22));">
       <div style="background:#fff;color:${style.color};border:2px solid ${style.color};border-radius:999px;padding:5px 9px;font-size:12px;font-weight:900;font-family:'Pretendard Variable','맑은 고딕',sans-serif;white-space:nowrap;">${label}</div>
       <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid ${style.color};margin-top:-1px;"></div>
-    </div>
-  `
-}
-
-function directionOverlayHtml(direction, step) {
-  const style = STEP_STYLE[step?.type] || STEP_STYLE.walk
-  return `
-    <div style="display:flex;align-items:center;gap:7px;background:#fff;border:2px solid ${style.color};border-radius:999px;padding:7px 11px;box-shadow:0 8px 18px rgba(15,23,42,0.18);font-family:'Pretendard Variable','맑은 고딕',sans-serif;">
-      <span style="width:24px;height:24px;border-radius:999px;background:${style.bg};color:${style.color};display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;">${direction.arrow}</span>
-      <span style="color:#0F172A;font-size:12px;font-weight:950;white-space:nowrap;">${escapeHtml(direction.label)} 방향</span>
     </div>
   `
 }
@@ -188,23 +190,62 @@ function createRouteGuidePath(kakao, basePoints, routeGuide) {
   }
 }
 
+function stepPathPoints(step) {
+  return compactRoutePoints(step?.routePoints?.length
+    ? step.routePoints
+    : [step?.startPoint, step?.endPoint])
+}
+
+function firstStepPoint(step) {
+  const points = stepPathPoints(step)
+  return points[0] || null
+}
+
+function lastStepPoint(step) {
+  const points = stepPathPoints(step)
+  return points[points.length - 1] || null
+}
+
+function fallbackStepPoints(step, index, steps, basePoints) {
+  const points = stepPathPoints(step)
+  if (points.length >= 2) return points
+  if (step?.type !== 'walk') return points
+
+  let start = index === 0 ? basePoints[0] : null
+  for (let i = index - 1; !start && i >= 0; i -= 1) {
+    start = lastStepPoint(steps[i])
+  }
+  start = start || basePoints[0]
+
+  let end = null
+  for (let i = index + 1; !end && i < steps.length; i += 1) {
+    end = firstStepPoint(steps[i])
+  }
+  end = end || basePoints[basePoints.length - 1]
+
+  return compactRoutePoints([start, end])
+}
+
 function createRouteGuideSegments(kakao, basePoints, routeGuide, routeMode) {
   if (routeMode === 'walk') {
     return [{
       source: 'walk',
       path: createDirectGuidePath(kakao, basePoints),
       step: routeGuide?.steps?.[0] || { type: 'walk', distance: routeGuide?.totalDistance },
+      nextStep: null,
       index: 0,
     }]
   }
 
-  const stepSegments = (routeGuide?.steps || []).flatMap((step, index) => {
-    const points = compactRoutePoints(step.routePoints?.length ? step.routePoints : [step.startPoint, step.endPoint])
+  const steps = routeGuide?.steps || []
+  const stepSegments = steps.flatMap((step, index) => {
+    const points = fallbackStepPoints(step, index, steps, basePoints)
     if (points.length < 2) return []
     return [{
       source: step.type === 'bus' ? 'bus' : step.type === 'subway' ? 'subway' : 'walk',
       path: points.map(point => toLatLng(kakao, point)),
       step,
+      nextStep: steps[index + 1] || null,
       index,
     }]
   })
@@ -238,6 +279,13 @@ function distanceLabel(meters) {
   return value < 1000 ? `${Math.round(value)}m` : `${(value / 1000).toFixed(1)}km`
 }
 
+function walkDistanceText(step) {
+  const direct = distanceLabel(step?.distance)
+  if (direct) return direct
+  const meta = String(step?.meta || '')
+  return meta.match(/\d+(?:\.\d+)?km|\d+m/)?.[0] || '다음 지점까지'
+}
+
 function bearingInfo(start, end) {
   if (!start || !end) return null
   const lat1 = Number(start.lat)
@@ -261,10 +309,6 @@ function bearingInfo(start, end) {
     { label: '북서쪽', arrow: '↖' },
   ]
   return items[Math.round(angle / 45) % 8]
-}
-
-function latLngPoint(latLng) {
-  return latLng ? { lat: latLng.getLat(), lng: latLng.getLng() } : null
 }
 
 function isInSeoul(lat, lng) {
@@ -325,7 +369,7 @@ function stepInstructionItems(step, direction) {
   const end = step.endName || '도착 지점'
   if (step.type === 'walk') {
     return [
-      `${direction ? `${direction.label} 방향으로 ` : ''}${distanceLabel(step.distance) || '표시된 거리'} 이동`,
+      `${direction ? `${direction.label} 방향으로 ` : '지도 위 파란 선 방향으로 '}${walkDistanceText(step)} 이동`,
       '횡단보도와 보행로를 우선해서 천천히 이동',
       '지도에서 도보 끝 표식을 찾으면 다음 안내 확인',
     ]
@@ -509,23 +553,9 @@ export default function RouteMap({
                 overlayRef.current.push(stepOverlay)
 
                 if (active && segment.path.length >= 2) {
-                  const startPoint = latLngPoint(segment.path[0])
-                  const endPoint = latLngPoint(segment.path[segment.path.length - 1])
-                  const direction = bearingInfo(startPoint, endPoint)
-                  if (direction) {
-                    const directionOverlay = new kakao.maps.CustomOverlay({
-                      position: segment.path[Math.floor(segment.path.length / 2)],
-                      content: directionOverlayHtml(direction, segment.step),
-                      yAnchor: 0.5,
-                      zIndex: 32,
-                    })
-                    directionOverlay.setMap(map)
-                    overlayRef.current.push(directionOverlay)
-                  }
-
                   const endOverlay = new kakao.maps.CustomOverlay({
                     position: segment.path[segment.path.length - 1],
-                    content: stepEndOverlayHtml(segment.step),
+                    content: stepEndOverlayHtml(segment.step, segment.nextStep),
                     yAnchor: 1.15,
                     zIndex: 28,
                   })
