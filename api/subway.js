@@ -21,7 +21,7 @@ export default async function handler(req, res) {
 
   try {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 7000)
+    const timeout = setTimeout(() => controller.abort(), 12000)
     const resp = await fetch(url, { signal: controller.signal })
     clearTimeout(timeout)
 
