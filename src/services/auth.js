@@ -1,5 +1,6 @@
 import { loginWithKakao, logoutKakao, getKakaoUser } from './kakaoAuth.js'
 import { supabase } from './supabase.js'
+import { getProfile, saveProfile } from './storage.js'
 
 const ROLE_KEY = 'silverpass_role'
 const USER_KEY = 'silverpass_kakao_user'
@@ -13,6 +14,17 @@ function hasRemoteProfile(userId) {
   return Boolean(userId) && !String(userId).startsWith('guest_')
 }
 
+function claimLocalProfile(user, role = user?.role) {
+  if (!user?.id) return
+  const local = getProfile()
+  saveProfile({
+    ...local,
+    ownerId: user.id,
+    profileRole: role || local.profileRole || 'user',
+    ...(user.name && { name: user.name }),
+  })
+}
+
 // 이메일 회원가입
 export async function signUpWithEmail(email, password, name, phone = '', role = 'user') {
   if (!supabase) throw new Error('Supabase 연결이 필요합니다')
@@ -21,10 +33,10 @@ export async function signUpWithEmail(email, password, name, phone = '', role = 
   const id = data.user.id
   await supabase.from('profiles').upsert({ id, name, thumbnail: '', role, phone }, { onConflict: 'id' })
   localStorage.setItem(ROLE_KEY, role)
-  const { getProfile, saveProfile } = await import('./storage.js')
   const profile = getProfile()
   saveProfile({ ...profile, name, guardianPhone: role === 'guardian' ? phone : profile.guardianPhone })
   const user = { id, name, thumbnail: '', provider: 'email' }
+  claimLocalProfile(user, role)
   saveLocalUser(user)
   return { ...user, role }
 }
@@ -39,6 +51,7 @@ export async function signInWithEmail(email, password) {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', id).maybeSingle()
   if (profile?.role) localStorage.setItem(ROLE_KEY, profile.role)
   const user = { id, name, thumbnail: '', provider: 'email' }
+  claimLocalProfile(user, profile?.role || 'user')
   saveLocalUser(user)
   return { ...user, role: profile?.role || null }
 }
@@ -59,10 +72,12 @@ export async function signIn() {
 
     if (data?.role) {
       localStorage.setItem(ROLE_KEY, data.role)
+      claimLocalProfile({ ...kakaoUser, provider: 'kakao' }, data.role)
       return { ...kakaoUser, role: data.role }
     }
   }
 
+  claimLocalProfile({ ...kakaoUser, provider: 'kakao' }, localStorage.getItem(ROLE_KEY))
   return { ...kakaoUser, role: localStorage.getItem(ROLE_KEY) }
 }
 
@@ -152,6 +167,7 @@ export async function getLinkedGuardian(userId) {
 export function startAsGuest(name) {
   const userId = 'guest_' + crypto.randomUUID()
   const user = { id: userId, name, thumbnail: '', provider: 'guest', role: 'user' }
+  claimLocalProfile(user, 'user')
   saveLocalUser(user)
   localStorage.setItem(ROLE_KEY, 'user')
   return user
@@ -183,6 +199,7 @@ export async function joinAsUser(inviteCode, userName = null) {
     }
 
     const user = { id: link.user_id, name: profile?.name || '어르신', thumbnail: '', provider: 'invite', role: 'user' }
+    claimLocalProfile(user, 'user')
     saveLocalUser(user)
     localStorage.setItem(ROLE_KEY, 'user')
     await syncElderProfileFromSupabase(link.user_id)
@@ -200,6 +217,7 @@ export async function joinAsUser(inviteCode, userName = null) {
   await supabase.from('links').update({ user_id: userId }).eq('invite_code', inviteCode.toUpperCase())
 
   const user = { id: userId, name: resolvedName, thumbnail: '', provider: 'invite', role: 'user' }
+  claimLocalProfile(user, 'user')
   saveLocalUser(user)
   localStorage.setItem(ROLE_KEY, 'user')
   await syncElderProfileFromSupabase(userId)

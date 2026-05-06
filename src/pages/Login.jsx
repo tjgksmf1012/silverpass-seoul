@@ -2,17 +2,9 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 const ROLE_KEY = 'silverpass_role'
-const USER_KEY = 'silverpass_kakao_user'
 
 function getRole() {
   return localStorage.getItem(ROLE_KEY)
-}
-
-function startAsGuest(name) {
-  const user = { id: 'guest_' + crypto.randomUUID(), name, thumbnail: '', provider: 'guest', role: 'user' }
-  localStorage.setItem(USER_KEY, JSON.stringify(user))
-  localStorage.setItem(ROLE_KEY, 'user')
-  return user
 }
 
 export default function Login() {
@@ -41,6 +33,7 @@ export default function Login() {
         const { joinAsUser } = await import('../services/auth.js')
         await joinAsUser(inviteCode.trim())
       } else {
+        const { startAsGuest } = await import('../services/auth.js')
         startAsGuest('어르신')
       }
       goHome()

@@ -63,6 +63,13 @@ export default function Home() {
   const [airNow, setAirNow] = useState(null)
   const [locating, setLocating] = useState(false)
   const recognitionRef = useRef(null)
+  const currentUser = getCurrentUser()
+
+  const profileBelongsToCurrentUser =
+    currentUser?.id && profile.ownerId && String(profile.ownerId) === String(currentUser.id)
+  const displayName = currentUser
+    ? (profileBelongsToCurrentUser && profile.name ? profile.name : currentUser.name)
+    : profile.name
 
   useEffect(() => {
     const p = getProfile()
@@ -70,11 +77,22 @@ export default function Home() {
     setHistory(getHistory())
     getAirQuality(extractDistrict(p.homeAddress) || p.district || '종로구').then(setAirNow)
 
-    const user = getCurrentUser()
-    if (user) {
+    const user = currentUser
+    if (user?.role === 'user') {
       getElderInfo(user.id).then(info => {
-        if (!info) return
-        const updated = { ...getProfile() }
+        const local = getProfile()
+        const profileOwner = local.ownerId && String(local.ownerId) === String(user.id)
+        const updated = {
+          ...local,
+          ownerId: user.id,
+          profileRole: 'user',
+          name: profileOwner && local.name ? local.name : (user.name || local.name),
+        }
+        if (!info) {
+          saveProfile(updated)
+          setProfile(updated)
+          return
+        }
         if (info.home_address) {
           updated.homeAddress = info.home_address
           updated.district = extractDistrict(info.home_address)
@@ -128,6 +146,15 @@ export default function Home() {
     setSuggestions([])
     setQuery('')
     navigate('/route', { state: { query: dest, parsed: parsed || { destination: dest } } })
+  }
+
+  function handleFavoriteClick(fav) {
+    if (fav.address) {
+      goRoute(fav.address, { destination: fav.name, address: fav.address })
+      return
+    }
+    const district = profile.district || extractDistrict(profile.homeAddress) || '종로구'
+    goRoute(`${district} ${fav.name}`, { destination: `${district} ${fav.name}`, category: fav.name })
   }
 
   async function handleSearch(q) {
@@ -189,7 +216,7 @@ export default function Home() {
           <div>
             <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.78)', fontWeight: 700, margin: 0 }}>{GREETING}</p>
             <h1 style={{ fontSize: 30, fontWeight: 900, color: '#fff', margin: '6px 0 0', lineHeight: 1.18 }}>
-              {profile.name ? `${profile.name}님,` : '실버패스 서울'}
+              {displayName ? `${displayName}님,` : '실버패스 서울'}
               <br />
               <span style={{ color: '#A7F3D0' }}>어디 가실 건가요?</span>
             </h1>
@@ -394,7 +421,7 @@ export default function Home() {
               const { Icon } = cfg
               return (
                 <button
-                  key={fav.id} onClick={() => fav.address ? goRoute(fav.address) : navigate('/profile')}
+                  key={fav.id} onClick={() => handleFavoriteClick(fav)}
                   style={{
                     border: 'none', background: '#fff',
                     borderRadius: 18, padding: '17px 10px 15px',
@@ -421,6 +448,11 @@ export default function Home() {
                   {fav.address && (
                     <span style={{ fontSize: 12, color: '#64748B', maxWidth: '90%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: -3, fontWeight: 600 }}>
                       {fav.address}
+                    </span>
+                  )}
+                  {!fav.address && (
+                    <span style={{ fontSize: 12, color: '#0D9488', maxWidth: '90%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: -3, fontWeight: 800 }}>
+                      근처 검색
                     </span>
                   )}
                 </button>

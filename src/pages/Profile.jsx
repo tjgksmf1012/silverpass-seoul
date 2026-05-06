@@ -27,6 +27,19 @@ export default function Profile() {
 
   useEffect(() => {
     if (!currentUser?.id) return
+    setProfile(p => {
+      if (p.ownerId && String(p.ownerId) === String(currentUser.id)) return p
+      return {
+        ...p,
+        ownerId: currentUser.id,
+        profileRole: currentUser.role || 'user',
+        ...(currentUser.name && { name: currentUser.name }),
+      }
+    })
+  }, [currentUser?.id, currentUser?.role, currentUser?.name])
+
+  useEffect(() => {
+    if (!currentUser?.id) return
     if (isElderly) {
       getLinkedGuardian(currentUser.id).then(setLinkedGuardian)
       syncElderProfileFromSupabase(currentUser.id).then(() => setProfile(getProfile()))
@@ -40,7 +53,16 @@ export default function Profile() {
     setProfile(p => ({ ...p, favorites: p.favorites.map(f => f.id === id ? { ...f, [field]: val } : f) }))
     setSaved(false)
   }
-  function handleSave() { saveProfile(profile); markVisited(); setSaved(true); setTimeout(() => navigate('/'), 800) }
+  function handleSave() {
+    const nextProfile = currentUser?.id
+      ? { ...profile, ownerId: currentUser.id, profileRole: currentUser.role || 'user' }
+      : profile
+    saveProfile(nextProfile)
+    setProfile(nextProfile)
+    markVisited()
+    setSaved(true)
+    setTimeout(() => navigate('/'), 800)
+  }
 
   async function handleLogout() {
     await signOut()
