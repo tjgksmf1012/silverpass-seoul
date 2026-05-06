@@ -3,6 +3,31 @@
  * swopenapi.seoul.go.kr (HTTP only → 서버사이드 호출 필요)
  * URL: /api/subway?station=종각역
  */
+function fallbackArrival(station, reason) {
+  return {
+    _fallback: true,
+    reason,
+    realtimeArrivalList: [
+      {
+        subwayId: '1001',
+        updnLine: '상행',
+        trainLineNm: `${station} 방면`,
+        arvlMsg2: '실시간 확인 지연',
+        arvlMsg3: station,
+        bstatnNm: station,
+      },
+      {
+        subwayId: '1001',
+        updnLine: '하행',
+        trainLineNm: `${station} 방면`,
+        arvlMsg2: '잠시 후 다시 확인',
+        arvlMsg3: station,
+        bstatnNm: station,
+      },
+    ],
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET')
@@ -21,9 +46,13 @@ export default async function handler(req, res) {
 
   try {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 12000)
-    const resp = await fetch(url, { signal: controller.signal })
-    clearTimeout(timeout)
+    const timeout = setTimeout(() => controller.abort(), 6500)
+    let resp
+    try {
+      resp = await fetch(url, { signal: controller.signal })
+    } finally {
+      clearTimeout(timeout)
+    }
 
     if (!resp.ok) {
       res.setHeader('Cache-Control', 'no-store')
@@ -53,6 +82,6 @@ export default async function handler(req, res) {
     res.json(data)
   } catch (e) {
     res.setHeader('Cache-Control', 'no-store')
-    res.status(200).json({ _demo: true, reason: e.message })
+    res.status(200).json(fallbackArrival(station.replace(/역$/, ''), e.name === 'AbortError' ? 'Seoul Subway API timeout' : e.message))
   }
 }
