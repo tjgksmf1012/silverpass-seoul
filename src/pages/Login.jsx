@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { SeniorIcon, UsersIcon } from '../components/Icons.jsx'
 
 const ROLE_KEY = 'silverpass_role'
 
@@ -106,7 +107,9 @@ export default function Login() {
               onClick={() => { setStep('elder'); setError('') }}
               className="w-full flex items-center gap-4 p-5 bg-white rounded-3xl border-2 border-brand-200 hover:border-brand-400 transition-all active:scale-95 shadow-sm"
             >
-              <span className="text-4xl">🧭</span>
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
+                <SeniorIcon size={32} color="#0D9488" stroke={2.1} />
+              </span>
               <div className="text-left">
                 <p className="text-lg font-bold text-gray-900">어르신</p>
                 <p className="text-sm text-gray-500">보호자 초대 코드가 있으면 연결하고, 없어도 바로 시작해요</p>
@@ -118,7 +121,9 @@ export default function Login() {
               onClick={() => { setStep('login'); setError('') }}
               className="w-full flex items-center gap-4 p-5 bg-white rounded-3xl border-2 border-gray-200 hover:border-gray-400 transition-all active:scale-95 shadow-sm"
             >
-              <span className="text-4xl">👨‍👩‍👧</span>
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-purple-50 text-purple-700">
+                <UsersIcon size={32} color="#7C3AED" stroke={2.1} />
+              </span>
               <div className="text-left">
                 <p className="text-lg font-bold text-gray-900">계정 로그인</p>
                 <p className="text-sm text-gray-500">어르신 또는 보호자 계정으로 들어가요</p>
@@ -192,21 +197,27 @@ export default function Login() {
                 {/* 역할 선택 */}
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: 'user', icon: '🧭', label: '어르신', sub: '내 이동 조건으로 길찾기' },
-                    { id: 'guardian', icon: '👨‍👩‍👧', label: '보호자', sub: '어르신 관리·모니터링' },
-                  ].map(r => (
+                    { id: 'user', Icon: SeniorIcon, color: '#0D9488', label: '어르신', sub: '내 이동 조건으로 길찾기' },
+                    { id: 'guardian', Icon: UsersIcon, color: '#7C3AED', label: '보호자', sub: '어르신 관리·모니터링' },
+                  ].map(r => {
+                    const Icon = r.Icon
+                    const selected = signupRole === r.id
+                    return (
                     <button key={r.id} type="button" onClick={() => setSignupRole(r.id)}
                       className={`p-3 rounded-2xl border-2 text-left transition-all active:scale-95 ${
-                        signupRole === r.id
+                        selected
                           ? 'border-brand-500 bg-brand-50'
                           : 'border-gray-200 bg-white'
                       }`}
                     >
-                      <p className="text-xl mb-0.5">{r.icon}</p>
-                      <p className={`text-sm font-bold ${signupRole === r.id ? 'text-brand-700' : 'text-gray-800'}`}>{r.label}</p>
+                      <span className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-gray-50">
+                        <Icon size={21} color={selected ? r.color : '#64748B'} stroke={2.1} />
+                      </span>
+                      <p className={`text-sm font-bold ${selected ? 'text-brand-700' : 'text-gray-800'}`}>{r.label}</p>
                       <p className="text-xs text-gray-400">{r.sub}</p>
                     </button>
-                  ))}
+                    )
+                  })}
                 </div>
                 <input type="text" placeholder="이름" value={name} onChange={e => setName(e.target.value)} required className="input-base" />
                 <input type="email" placeholder="이메일" value={email} onChange={e => setEmail(e.target.value)} required className="input-base" />

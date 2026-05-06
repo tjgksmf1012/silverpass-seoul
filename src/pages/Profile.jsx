@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import BottomNav from '../components/BottomNav.jsx'
 import { ArrowLeft, UserIcon, PhoneIcon, WalkIcon, SettingsIcon,
-         MapPin, CheckCircle, BuildingIcon } from '../components/Icons.jsx'
+         MapPin, CheckCircle, BuildingIcon, SeniorIcon } from '../components/Icons.jsx'
 import { createDefaultProfile, getProfile, saveProfile, markVisited } from '../services/storage.js'
 import { getKakaoUser } from '../services/kakaoAuth.js'
 import { getCurrentUser, signOut, getLinkedGuardian, syncElderProfileFromSupabase, syncGuardianProfileFromSupabase } from '../services/auth.js'
@@ -117,7 +117,9 @@ export default function Profile() {
             /* 게스트 (비로그인) */
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#F0FDFA', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🧭</div>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#F0FDFA', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <SeniorIcon size={24} color="#0D9488" stroke={2.1} />
+                </div>
                 <div>
                   <p style={{ fontWeight: 800, fontSize: 15, color: '#0F172A', margin: 0 }}>비로그인 상태</p>
                   <p style={{ fontSize: 12, color: '#94A3B8', margin: '2px 0 0' }}>계정 없이 사용 중이에요</p>

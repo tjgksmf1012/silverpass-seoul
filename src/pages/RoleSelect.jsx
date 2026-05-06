@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { SeniorIcon, UsersIcon } from '../components/Icons.jsx'
 import { getCurrentUser, setRole } from '../services/auth.js'
 
 export default function RoleSelect() {
@@ -12,7 +13,9 @@ export default function RoleSelect() {
   const roles = [
     {
       id: 'user',
-      emoji: '🧭',
+      Icon: SeniorIcon,
+      iconColor: '#0D9488',
+      iconBg: 'bg-brand-50',
       title: '어르신',
       desc: '내 조건에 맞는\n쉬운 길 안내를 받을게요',
       color: 'border-brand-500 bg-brand-50',
@@ -20,7 +23,9 @@ export default function RoleSelect() {
     },
     canUseGuardianRole ? {
       id: 'guardian',
-      emoji: '👨‍👩‍👧',
+      Icon: UsersIcon,
+      iconColor: '#7C3AED',
+      iconBg: 'bg-purple-50',
       title: '보호자',
       desc: '어르신의 이동을\n함께 확인하고 싶어요',
       color: 'border-purple-300 bg-purple-50',
@@ -67,7 +72,9 @@ export default function RoleSelect() {
                 selected === role.id ? role.activeColor : role.color
               }`}
             >
-              <span className="text-5xl">{role.emoji}</span>
+              <span className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl ${role.iconBg}`}>
+                <role.Icon size={36} color={role.iconColor} stroke={2.1} />
+              </span>
               <div className="text-left">
                 <p className="text-xl font-bold text-gray-900">{role.title}</p>
                 <p className="text-gray-600 text-senior whitespace-pre-line">{role.desc}</p>

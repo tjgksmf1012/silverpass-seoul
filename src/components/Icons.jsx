@@ -64,6 +64,22 @@ export const UserIcon = ({ size = 20, color = 'currentColor', stroke = 1.8 }) =>
     <circle cx="12" cy="7" r="4"/>
   </svg>
 )
+export const SeniorIcon = ({ size = 20, color = 'currentColor', stroke = 1.8 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...s} stroke={color} strokeWidth={stroke}>
+    <circle cx="10" cy="6" r="3"/>
+    <path d="M4 21v-1a6 6 0 0 1 12 0v1"/>
+    <path d="M18 13v8"/>
+    <path d="M18 13a3 3 0 0 1 3 3"/>
+  </svg>
+)
+export const UsersIcon = ({ size = 20, color = 'currentColor', stroke = 1.8 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...s} stroke={color} strokeWidth={stroke}>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+    <circle cx="9" cy="7" r="4"/>
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+  </svg>
+)
 export const ShareIcon = ({ size = 20, color = 'currentColor', stroke = 1.8 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" {...s} stroke={color} strokeWidth={stroke}>
     <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
