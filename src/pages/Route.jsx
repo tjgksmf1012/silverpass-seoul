@@ -209,7 +209,6 @@ export default function Route_() {
   const [destinationResolving, setDestinationResolving] = useState(false)
   const [destinationResolveNote, setDestinationResolveNote] = useState('')
   const coordsApplied = useRef(false)
-  const guideSectionRef = useRef(null)
 
   const profile = getProfile()
   const routeRequestText = state?.parsed?.destination || state?.parsed?.address || state?.query || ''
@@ -696,14 +695,6 @@ export default function Route_() {
     window.speechSynthesis.speak(utterance)
   }
 
-  function startInAppGuide() {
-    setCurrentGuideStep(0)
-    requestAnimationFrame(() => {
-      guideSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    })
-    if (guideSteps[0]) speakGuideStep(guideSteps[0])
-  }
-
   return (
     <div style={{ minHeight: '100vh', background: '#F3F7FA', paddingBottom: 128 }}>
 
@@ -988,25 +979,10 @@ export default function Route_() {
                 ))}
               </div>
 
-              <div style={{ background: '#F0FDFA', border: '1.5px solid #99F6E4', borderRadius: 16, padding: 14, marginBottom: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#0D9488', boxShadow: '0 0 0 4px #CCFBF1', flexShrink: 0 }} />
-                  <p style={{ fontSize: 15, fontWeight: 950, color: '#0F172A', margin: 0 }}>앱 안에서 상세 안내</p>
-                </div>
-                <p style={{ fontSize: 13, fontWeight: 750, color: '#0F766E', lineHeight: 1.5, margin: '0 0 12px' }}>
-                  {isWalkOnlyRoute
-                    ? '이 화면에서 도보 거리, 대기질, 쉬어가기 정보를 보며 이동해요. 지도 점선은 방향 참고용이고 아래 안내를 차례대로 따라가세요.'
-                    : '이 화면에서 걷기, 탑승, 하차, 환승 순서를 모두 확인해요. 버스·지하철 실시간 정보와 공공데이터 조건도 함께 반영돼요.'}
-                </p>
-                <button onClick={startInAppGuide} style={{ width: '100%', minHeight: 56, borderRadius: 14, border: 'none', background: '#0D9488', color: '#fff', fontSize: 18, fontWeight: 950, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 14px', textAlign: 'center', cursor: 'pointer', fontFamily: 'inherit' }}>
-                  앱 안에서 안내 시작
-                </button>
-              </div>
-
               {activeGuide && (
-                <div ref={guideSectionRef} style={{ background: '#0F172A', borderRadius: 18, padding: 16, marginBottom: 14, color: '#fff', boxShadow: '0 12px 28px rgba(15,23,42,0.20)', scrollMarginTop: 96 }}>
+                <div style={{ background: '#0F172A', borderRadius: 18, padding: 16, marginBottom: 14, color: '#fff', boxShadow: '0 12px 28px rgba(15,23,42,0.20)', scrollMarginTop: 96 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                    <p style={{ fontSize: 13, fontWeight: 950, color: '#99F6E4', margin: 0 }}>지금 따라가기</p>
+                    <p style={{ fontSize: 13, fontWeight: 950, color: '#99F6E4', margin: 0 }}>바로 안내</p>
                     <span style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.16)', borderRadius: 20, padding: '4px 9px', fontSize: 12, fontWeight: 950 }}>
                       {activeGuideIndex + 1} / {guideSteps.length}
                     </span>
