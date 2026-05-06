@@ -5,9 +5,9 @@ import { getRouteData, getRealtimeSubwayArrival } from '../services/seoulApi.js'
 import { generateSubwayGuide } from '../services/claude.js'
 import { searchPlaces } from '../services/kakaoSearch.js'
 import { searchTransitRoute, getRealtimeBusInfo, formatArrivalTime, pathTypeIcon } from '../services/odsayApi.js'
-import { getCurrentUser, getElderInfo, saveHistory } from '../services/auth.js'
+import { getCurrentUser, getElderInfo, saveHistory, getLinkedGuardian } from '../services/auth.js'
 import { ArrowLeft, BusIcon, ElevatorIcon, WindIcon,
-         ShelterIcon, ShareIcon, AlertIcon, SearchIcon, MapPin } from '../components/Icons.jsx'
+         ShelterIcon, AlertIcon, SearchIcon, MapPin } from '../components/Icons.jsx'
 import RouteMap from '../components/RouteMap.jsx'
 
 const BURDEN = {
@@ -112,6 +112,7 @@ export default function Route_() {
   const navigate = useNavigate()
   const { state } = useLocation()
   const [routeData, setRouteData]         = useState(null)
+  const [autoShared, setAutoShared]       = useState(false)
   const [loading, setLoading]             = useState(true)
   const [activeTab, setActiveTab]         = useState('bus')
   const [subwayGuide, setSubwayGuide]     = useState(null)
@@ -260,7 +261,14 @@ export default function Route_() {
         setRouteData(data)
         setSubwayGuide(subway)
         addHistory({ destination, duration: data.duration, burden: data.burden })
-        if (user) saveHistory(user.id, { destination, burden: data.burden, duration: String(data.duration) })
+        const canAutoShare = user?.id && !String(user.id).startsWith('guest_')
+        if (canAutoShare) {
+          const [guardian] = await Promise.all([
+            getLinkedGuardian(user.id),
+            saveHistory(user.id, { destination, burden: data.burden, duration: String(data.duration) }),
+          ])
+          setAutoShared(Boolean(guardian))
+        }
         if (subway?.nearestStation) {
           const arrivals = await getRealtimeSubwayArrival(subway.nearestStation)
           setRealtimeArrivals(arrivals)
@@ -1086,14 +1094,25 @@ export default function Route_() {
           borderTop: '1px solid #E2E8F0',
           boxShadow: '0 -10px 28px rgba(15,23,42,0.1)',
           padding: '10px 14px 16px',
-          display: 'grid',
-          gridTemplateColumns: '1fr 0.72fr',
-          gap: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
           zIndex: 40,
         }}>
-          <button onClick={() => navigate('/share', { state: { destination, routeData } })} style={{ width: '100%', border: 'none', borderRadius: 16, background: 'linear-gradient(135deg, #0F766E, #0D9488)', color: '#fff', fontWeight: 900, fontSize: 17, padding: '16px 0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 16px rgba(13,148,136,0.22)' }}>
-            <ShareIcon size={20} color="#fff" stroke={2} /> 보호자 공유
-          </button>
+          {autoShared && (
+            <div style={{
+              border: '1px solid #CCFBF1',
+              borderRadius: 14,
+              background: '#F0FDFA',
+              color: '#0F766E',
+              fontWeight: 800,
+              fontSize: 13,
+              padding: '10px 12px',
+              textAlign: 'center',
+            }}>
+              보호자 화면에 이동 기록이 자동 공유됐어요
+            </div>
+          )}
           <button onClick={() => navigate('/emergency')} style={{ width: '100%', border: '1.5px solid #FECACA', borderRadius: 16, background: '#FEF2F2', color: '#B91C1C', fontWeight: 900, fontSize: 17, padding: '16px 0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <AlertIcon size={19} color="#DC2626" stroke={2} /> 응급
           </button>
