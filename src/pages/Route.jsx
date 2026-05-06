@@ -198,6 +198,8 @@ export default function Route_() {
   const [liveCoords, setLiveCoords]       = useState(null)
   const [selectedRoute, setSelectedRoute] = useState(0)     // 선택된 경로 인덱스
   const [currentGuideStep, setCurrentGuideStep] = useState(0)
+  const [showFullSteps, setShowFullSteps] = useState(false)
+  const [showTransportDetails, setShowTransportDetails] = useState(false)
   const [healthNotes, setHealthNotes]     = useState('')
   const [manualStart, setManualStart]     = useState(() => normalizeRoutePoint(state?.startPlace || state?.parsed?.startPlace))
   const [viaPlace, setViaPlace]           = useState(() => normalizeRoutePoint(state?.viaPlace || state?.parsed?.viaPlace))
@@ -687,6 +689,14 @@ export default function Route_() {
   const mapRouteGuide = isWalkOnlyRoute || !hasExactRoute
     ? { steps: fullRouteSteps, totalDistance: displayPrimaryWalk, totalTime: displayPrimaryTime }
     : bestRoute
+  const routeDataTags = isWalkOnlyRoute
+    ? ['도보 거리', air?.grade ? `대기질 ${air.grade}` : '대기질', '쉼터·응급 정보']
+    : ['대중교통 경로', '버스·지하철 실시간', '승강기·대기질']
+  const routeSummaryItems = [
+    { label: '총 소요', value: `${displayPrimaryTime}분`, color: '#0D9488' },
+    { label: '전체 도보', value: formatDistance(displayPrimaryWalk), color: '#374151' },
+    { label: '요금', value: isWalkOnlyRoute ? '없음' : (bestRoute?.totalFare ? `${bestRoute.totalFare.toLocaleString()}원` : '확인 중'), color: '#7C3AED' },
+  ]
 
   function speakGuideStep(guide) {
     if (!guide || typeof window === 'undefined' || !('speechSynthesis' in window)) return
@@ -835,7 +845,7 @@ export default function Route_() {
         </div>
 
         {/* ── 이동 안전 체크 ── */}
-        <div style={{ order: 4, background: b.bg, border: `1.5px solid ${b.border}`, borderRadius: 22, padding: '22px 20px 18px' }}>
+        <div style={{ order: 3, background: b.bg, border: `1.5px solid ${b.border}`, borderRadius: 20, padding: '16px 16px 14px' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
             <div>
               <span style={{ background: '#fff', color: b.text, fontSize: 13, fontWeight: 900, padding: '5px 11px', borderRadius: 20, border: `1px solid ${b.border}` }}>이동 부담도</span>
@@ -875,7 +885,7 @@ export default function Route_() {
         </div>
 
         {/* ── ② 지도 ── */}
-        <div style={{ order: 3 }}>
+        <div style={{ order: 1 }}>
           <RouteMap
             destination={destination}
             searchKeyword={destinationSearchKeyword}
@@ -900,7 +910,7 @@ export default function Route_() {
 
         {/* ── ④ 전체 경로 ── */}
         {routeData && (
-          <div style={{ order: 1, background: '#fff', border: '2px solid #99F6E4', borderRadius: 18, overflow: 'hidden', boxShadow: '0 10px 24px rgba(13,148,136,0.10)' }}>
+          <div style={{ order: 2, background: '#fff', border: '1.5px solid #D9F7EF', borderRadius: 18, overflow: 'hidden', boxShadow: '0 2px 8px rgba(15,23,42,0.05)' }}>
             <div style={{ padding: '13px 16px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 7, height: 7, borderRadius: '50%', background: isWalkOnlyRoute ? '#2563EB' : hasExactRoute ? '#059669' : '#F59E0B', animation: hasExactRoute && !isWalkOnlyRoute ? 'liveP 1.5s infinite' : 'none' }} />
               <p style={{ fontWeight: 900, fontSize: 15, color: '#0F172A', margin: 0 }}>{isWalkOnlyRoute ? '도보 전용 안내' : hasExactRoute ? '정확한 전체 경로' : '전체 경로 안내'}</p>
@@ -945,42 +955,26 @@ export default function Route_() {
               </div>
             )}
 
-            <div style={{ padding: '14px 16px' }}>
-              {hasExactRoute && selectedCriteria && (
-                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 14, padding: '12px 14px', marginBottom: 14 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: selectedCriteria.color, flexShrink: 0 }} />
-                    <p style={{ fontSize: 14, fontWeight: 950, color: '#0F172A', margin: 0 }}>{selectedRoute + 1}안 기준: {selectedCriteria.label}</p>
+            <div style={{ padding: '12px 16px 16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8, marginBottom: 10 }}>
+                {routeSummaryItems.map(({ label, value, color }) => (
+                  <div key={label} style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: '10px 8px', textAlign: 'center', minWidth: 0 }}>
+                    <p style={{ fontSize: 11, color: '#94A3B8', fontWeight: 800, margin: 0 }}>{label}</p>
+                    <p style={{ fontSize: 16, fontWeight: 950, color, margin: '4px 0 0', whiteSpace: 'nowrap' }}>{value}</p>
                   </div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: '#64748B', lineHeight: 1.45, margin: 0 }}>{selectedCriteria.desc}</p>
-                </div>
-              )}
-
-              <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 14, padding: '11px 12px', marginBottom: 14 }}>
-                <p style={{ fontSize: 13, fontWeight: 950, color: '#0F172A', margin: '0 0 6px' }}>공공데이터 반영</p>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {(isWalkOnlyRoute
-                    ? ['도보 거리', air?.grade ? `대기질 ${air.grade}` : '대기질', '쉼터·응급 정보']
-                    : ['대중교통 경로', '버스·지하철 실시간', '승강기·대기질']
-                  ).map(item => (
-                    <span key={item} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 20, color: '#475569', fontSize: 12, fontWeight: 900, padding: '5px 9px' }}>
-                      {item}
-                    </span>
-                  ))}
-                </div>
+                ))}
               </div>
 
-              {/* 요약 정보 */}
-              <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-                {[
-                  { label: '총 소요', value: `${displayPrimaryTime}분`, color: '#0D9488' },
-                  { label: '전체 도보', value: formatDistance(displayPrimaryWalk), color: '#374151' },
-                  { label: '요금', value: isWalkOnlyRoute ? '없음' : (bestRoute?.totalFare ? `${bestRoute.totalFare.toLocaleString()}원` : '확인 중'), color: '#7C3AED' },
-                ].map(({ label, value, color }) => (
-                  <div key={label} style={{ flex: 1, background: '#F8F9FA', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
-                    <p style={{ fontSize: 11, color: '#94A3B8', margin: 0 }}>{label}</p>
-                    <p style={{ fontSize: 15, fontWeight: 800, color, margin: '4px 0 0' }}>{value}</p>
-                  </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                {hasExactRoute && selectedCriteria && (
+                  <span style={{ background: '#F0FDFA', border: '1px solid #CCFBF1', color: '#0F766E', borderRadius: 20, fontSize: 12, fontWeight: 950, padding: '6px 10px' }}>
+                    {selectedRoute + 1}안 · {selectedCriteria.short}
+                  </span>
+                )}
+                {routeDataTags.map(item => (
+                  <span key={item} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 20, color: '#475569', fontSize: 12, fontWeight: 850, padding: '6px 10px' }}>
+                    {item}
+                  </span>
                 ))}
               </div>
 
@@ -1036,7 +1030,32 @@ export default function Route_() {
               )}
 
               {/* 단계별 전체 경로 */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ marginTop: 4 }}>
+                <button
+                  onClick={() => setShowFullSteps(open => !open)}
+                  style={{
+                    width: '100%',
+                    minHeight: 50,
+                    borderRadius: 14,
+                    border: '1px solid #D9F7EF',
+                    background: '#F8FAFC',
+                    color: '#0F172A',
+                    fontSize: 15,
+                    fontWeight: 950,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0 14px',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <span>전체 순서 {showFullSteps ? '접기' : '자세히 보기'}</span>
+                  <span style={{ color: '#0D9488', fontSize: 13 }}>{fullRouteSteps.length}단계</span>
+                </button>
+
+                {showFullSteps && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
                 {fullRouteSteps.map((step, i) => {
                   const walkText = step.type === 'walk' ? getWalkText(step, i, fullRouteSteps) : null
                   return (
@@ -1140,6 +1159,8 @@ export default function Route_() {
                     </div>
                   )
                 })}
+                  </div>
+                )}
               </div>
             </div>
             <style>{`@keyframes liveP { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
@@ -1147,11 +1168,32 @@ export default function Route_() {
         )}
 
         {/* ── ⑤ 이동수단 탭 ── */}
-        {!isWalkOnlyRoute && <div style={{ order: 5, background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ padding: '15px 16px 10px' }}>
-            <p style={{ fontSize: 13, color: '#64748B', fontWeight: 900, margin: '0 0 3px' }}>추가 교통 정보</p>
-            <p style={{ fontSize: 19, color: '#0F172A', fontWeight: 950, margin: 0 }}>다른 이동 방법도 확인하세요</p>
-          </div>
+        {!isWalkOnlyRoute && <div style={{ order: 6, background: '#fff', border: '1.5px solid #F1F5F9', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <button
+            onClick={() => setShowTransportDetails(open => !open)}
+            style={{
+              width: '100%',
+              border: 'none',
+              background: '#fff',
+              padding: '15px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 13, color: '#64748B', fontWeight: 900, margin: '0 0 3px' }}>실시간 교통 정보</p>
+              <p style={{ fontSize: 17, color: '#0F172A', fontWeight: 950, margin: 0 }}>버스·지하철·콜택시 보기</p>
+            </div>
+            <span style={{ background: '#F0FDFA', color: '#0D9488', borderRadius: 20, padding: '6px 10px', fontSize: 12, fontWeight: 950 }}>
+              {showTransportDetails ? '접기' : '보기'}
+            </span>
+          </button>
+          {showTransportDetails && (
+            <>
           <div style={{ display: 'flex', borderBottom: '1px solid #F1F5F9' }}>
             {[
               { id: 'bus',    label: '🚌 버스' },
@@ -1346,6 +1388,8 @@ export default function Route_() {
                 )}
               </div>
             </div>
+          )}
+            </>
           )}
         </div>}
 

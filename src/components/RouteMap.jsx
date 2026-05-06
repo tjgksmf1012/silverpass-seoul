@@ -551,7 +551,7 @@ export default function RouteMap({
       </div>
 
       <div style={{ position: 'relative' }}>
-        <div ref={mapDivRef} style={{ height: 270 }} />
+        <div ref={mapDivRef} style={{ height: 250 }} />
 
         {status === 'loading' && (
           <div style={{
@@ -644,22 +644,6 @@ export default function RouteMap({
       )}
 
       <div style={{ padding: '8px 14px', borderTop: '1px solid #F8FAFC' }}>
-        {(routeMode === 'walk' || routeGuide?.steps?.length) && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
-            {(routeMode === 'walk'
-              ? [{ label: '도보', color: '#2563EB', dash: true }]
-              : [
-                { label: '도보', color: '#2563EB', dash: true },
-                { label: '버스', color: '#059669' },
-                { label: '지하철', color: '#7C3AED' },
-              ]).map(item => (
-              <span key={item.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 800, color: '#64748B' }}>
-                <span style={{ width: 18, height: 0, borderTop: `3px ${item.dash ? 'dashed' : 'solid'} ${item.color}`, borderRadius: 2 }} />
-                {item.label}
-              </span>
-            ))}
-          </div>
-        )}
         <p style={{ fontSize: 11, color: locationNote ? '#94A3B8' : '#CBD5E1', margin: 0 }}>
           {locationNote || '지도 © Kakao'}
         </p>
