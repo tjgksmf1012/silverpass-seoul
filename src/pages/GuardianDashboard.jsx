@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getCurrentUser, signOut, generateInviteCode, getLinkedUser, getLinkedUserHistory, updateElderInfo, getElderInfo, generateReloginCode } from '../services/auth.js'
-import { DEFAULT_FAVORITES, createFavoritePlace, normalizeFavorites } from '../services/storage.js'
+import { DEFAULT_FAVORITES, DEFAULT_PROFILE, createFavoritePlace, normalizeFavorites } from '../services/storage.js'
 
 function openAddressSearch(onSelect) {
   if (!window.daum?.Postcode) return
@@ -14,6 +14,46 @@ const BURDEN_LABEL = { low: '낮음', medium: '보통', high: '높음' }
 const BURDEN_COLOR = { low: 'text-green-600 bg-green-50', medium: 'text-yellow-600 bg-yellow-50', high: 'text-red-600 bg-red-50' }
 
 const ICON_OPTIONS = ['📍', '🏠', '👨‍👩‍👧', '🏥', '💊', '🏛️', '🛒', '☕', '🌳', '🚉']
+
+function createDefaultElderInfo() {
+  return {
+    homeAddress: '',
+    favorites: normalizeFavorites(DEFAULT_FAVORITES),
+    notes: '',
+    phone: '',
+    district: '',
+    maxWalkMin: DEFAULT_PROFILE.maxWalkMin,
+    allowStairs: DEFAULT_PROFILE.allowStairs,
+    mobilityAid: DEFAULT_PROFILE.mobilityAid,
+    preferLowFloorBus: DEFAULT_PROFILE.preferLowFloorBus,
+    preferElevator: DEFAULT_PROFILE.preferElevator,
+    avoidTransfers: DEFAULT_PROFILE.avoidTransfers,
+    needRestStops: DEFAULT_PROFILE.needRestStops,
+    slowPace: DEFAULT_PROFILE.slowPace,
+  }
+}
+
+function movementPreferenceLabels(info) {
+  return [
+    !info.allowStairs && '계단 없는 길',
+    info.mobilityAid && '보행보조기구',
+    info.preferLowFloorBus && '저상버스',
+    info.preferElevator && '승강기',
+    info.avoidTransfers && '환승 적게',
+    info.needRestStops && '중간 쉼터',
+    info.slowPace && '천천히 걷기',
+  ].filter(Boolean)
+}
+
+function hasElderInfo(info) {
+  return Boolean(
+    info.homeAddress ||
+    info.phone ||
+    info.notes ||
+    info.favorites.some(f => f.address) ||
+    movementPreferenceLabels(info).length
+  )
+}
 
 function parseFavorites(frequentPlaces) {
   try {
@@ -41,10 +81,7 @@ export default function GuardianDashboard() {
   const [copied, setCopied] = useState(false)
   const [elderName, setElderName] = useState('')
 
-  const [elderInfo, setElderInfo] = useState({
-    homeAddress: '', favorites: normalizeFavorites(DEFAULT_FAVORITES),
-    notes: '', phone: '', district: '', maxWalkMin: 20, allowStairs: true, mobilityAid: false,
-  })
+  const [elderInfo, setElderInfo] = useState(createDefaultElderInfo)
   const [editingInfo, setEditingInfo] = useState(false)
   const [infoSaving, setInfoSaving] = useState(false)
   const [infoSaved, setInfoSaved] = useState(false)
@@ -66,15 +103,22 @@ export default function GuardianDashboard() {
         ])
         setHistory(hist)
         if (info) {
+          const base = createDefaultElderInfo()
           setElderInfo({
+            ...base,
             homeAddress: info.home_address || '',
             favorites: parseFavorites(info.frequent_places),
             notes: info.notes || '',
             phone: info.phone || '',
             district: info.district || '',
-            maxWalkMin: info.max_walk_min || 20,
-            allowStairs: info.allow_stairs ?? true,
-            mobilityAid: info.mobility_aid ?? false,
+            maxWalkMin: info.max_walk_min || base.maxWalkMin,
+            allowStairs: info.allow_stairs ?? base.allowStairs,
+            mobilityAid: info.mobility_aid ?? base.mobilityAid,
+            preferLowFloorBus: info.prefer_low_floor_bus ?? base.preferLowFloorBus,
+            preferElevator: info.prefer_elevator ?? base.preferElevator,
+            avoidTransfers: info.avoid_transfers ?? base.avoidTransfers,
+            needRestStops: info.need_rest_stops ?? base.needRestStops,
+            slowPace: info.slow_pace ?? base.slowPace,
           })
         }
       }
@@ -294,7 +338,7 @@ export default function GuardianDashboard() {
                     onClick={() => setEditingInfo(true)}
                     className="text-sm text-brand-600 font-semibold px-3 py-1 bg-brand-50 rounded-xl active:scale-95 transition-all"
                   >
-                    {elderInfo.homeAddress || elderInfo.phone || elderInfo.favorites.some(f => f.address) ? '수정' : '+ 등록'}
+                    {hasElderInfo(elderInfo) ? '수정' : '+ 등록'}
                   </button>
                 )}
               </div>
@@ -451,6 +495,36 @@ export default function GuardianDashboard() {
                       value={elderInfo.mobilityAid}
                       onChange={v => setElderInfo(p => ({ ...p, mobilityAid: v }))}
                     />
+                    <GuardianToggle
+                      label="저상버스 우선"
+                      desc="버스 경로는 저상버스 가능성을 더 우선"
+                      value={elderInfo.preferLowFloorBus}
+                      onChange={v => setElderInfo(p => ({ ...p, preferLowFloorBus: v }))}
+                    />
+                    <GuardianToggle
+                      label="승강기 있는 경로 우선"
+                      desc="지하철 출구와 환승은 승강기 접근을 우선"
+                      value={elderInfo.preferElevator}
+                      onChange={v => setElderInfo(p => ({ ...p, preferElevator: v }))}
+                    />
+                    <GuardianToggle
+                      label="환승 적은 길 우선"
+                      desc="조금 돌아가도 갈아타는 횟수를 줄이기"
+                      value={elderInfo.avoidTransfers}
+                      onChange={v => setElderInfo(p => ({ ...p, avoidTransfers: v }))}
+                    />
+                    <GuardianToggle
+                      label="중간에 쉴 곳 필요"
+                      desc="쉼터·약국 같은 안전 지점을 더 중요하게 보기"
+                      value={elderInfo.needRestStops}
+                      onChange={v => setElderInfo(p => ({ ...p, needRestStops: v }))}
+                    />
+                    <GuardianToggle
+                      label="천천히 걷기"
+                      desc="예상 시간을 여유 있게 잡고 도보 부담을 낮추기"
+                      value={elderInfo.slowPace}
+                      onChange={v => setElderInfo(p => ({ ...p, slowPace: v }))}
+                    />
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-gray-500 mb-1 block">메모</label>
@@ -483,7 +557,7 @@ export default function GuardianDashboard() {
                   {infoSaved && (
                     <p className="text-green-600 text-sm text-center bg-green-50 rounded-xl py-2 mb-2">저장됐어요!</p>
                   )}
-                  {!elderInfo.homeAddress && !elderInfo.phone && !elderInfo.notes && !elderInfo.favorites.some(f => f.address) ? (
+                  {!hasElderInfo(elderInfo) ? (
                     <div className="text-center py-6 text-gray-400">
                       <p className="text-3xl mb-2">📋</p>
                       <p className="text-sm">아직 등록된 정보가 없어요</p>
@@ -508,10 +582,11 @@ export default function GuardianDashboard() {
                         <InfoRow icon="📌" label="거주 구" value={elderInfo.district} />
                       )}
                       <InfoRow icon="🚶" label="최대 도보" value={`${elderInfo.maxWalkMin}분`} />
-                      <InfoRow icon={elderInfo.allowStairs ? '✅' : '🚫'} label="계단" value={elderInfo.allowStairs ? '이용 가능' : '이용 불가'} />
-                      {elderInfo.mobilityAid && (
-                        <InfoRow icon="♿" label="보행보조기구" value="사용 중" />
-                      )}
+                      <InfoRow
+                        icon="⚙️"
+                        label="이동 조건"
+                        value={movementPreferenceLabels(elderInfo).join(', ') || '기본 안내'}
+                      />
                       {elderInfo.notes && (
                         <InfoRow icon="📝" label="메모" value={elderInfo.notes} />
                       )}

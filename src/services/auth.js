@@ -1,6 +1,6 @@
 import { loginWithKakao, logoutKakao, getKakaoUser } from './kakaoAuth.js'
 import { supabase } from './supabase.js'
-import { createDefaultProfile, getProfile, normalizeFavorites, saveProfile } from './storage.js'
+import { DEFAULT_PROFILE, createDefaultProfile, getProfile, normalizeFavorites, saveProfile } from './storage.js'
 
 const ROLE_KEY = 'silverpass_role'
 const USER_KEY = 'silverpass_kakao_user'
@@ -360,10 +360,56 @@ export async function getLinkedUserHistory(userId) {
   return data || []
 }
 
+function encodeElderNotes(notes, preferences = {}) {
+  const text = typeof notes === 'string' ? notes : ''
+  return JSON.stringify({
+    __silverpass: 'elder_notes',
+    version: 1,
+    text,
+    preferences: {
+      preferLowFloorBus: preferences.preferLowFloorBus ?? DEFAULT_PROFILE.preferLowFloorBus,
+      preferElevator: preferences.preferElevator ?? DEFAULT_PROFILE.preferElevator,
+      avoidTransfers: preferences.avoidTransfers ?? DEFAULT_PROFILE.avoidTransfers,
+      needRestStops: preferences.needRestStops ?? DEFAULT_PROFILE.needRestStops,
+      slowPace: preferences.slowPace ?? DEFAULT_PROFILE.slowPace,
+    },
+  })
+}
+
+function decodeElderNotes(rawNotes) {
+  const fallback = {
+    notes: rawNotes || '',
+    prefer_low_floor_bus: DEFAULT_PROFILE.preferLowFloorBus,
+    prefer_elevator: DEFAULT_PROFILE.preferElevator,
+    avoid_transfers: DEFAULT_PROFILE.avoidTransfers,
+    need_rest_stops: DEFAULT_PROFILE.needRestStops,
+    slow_pace: DEFAULT_PROFILE.slowPace,
+  }
+
+  if (!rawNotes || typeof rawNotes !== 'string') return fallback
+
+  try {
+    const parsed = JSON.parse(rawNotes)
+    if (parsed?.__silverpass !== 'elder_notes') return fallback
+    const preferences = parsed.preferences || {}
+    return {
+      notes: parsed.text || '',
+      prefer_low_floor_bus: preferences.preferLowFloorBus ?? DEFAULT_PROFILE.preferLowFloorBus,
+      prefer_elevator: preferences.preferElevator ?? DEFAULT_PROFILE.preferElevator,
+      avoid_transfers: preferences.avoidTransfers ?? DEFAULT_PROFILE.avoidTransfers,
+      need_rest_stops: preferences.needRestStops ?? DEFAULT_PROFILE.needRestStops,
+      slow_pace: preferences.slowPace ?? DEFAULT_PROFILE.slowPace,
+    }
+  } catch {
+    return fallback
+  }
+}
+
 // 어르신 추가 정보 저장 (보호자가 등록)
 export async function updateElderInfo(elderId, {
   homeAddress, frequentPlaces, notes, phone,
   district, maxWalkMin, allowStairs, mobilityAid,
+  preferLowFloorBus, preferElevator, avoidTransfers, needRestStops, slowPace,
 }) {
   if (!supabase || !hasRemoteProfile(elderId)) return
 
@@ -372,7 +418,13 @@ export async function updateElderInfo(elderId, {
     .update({
       home_address: homeAddress,
       frequent_places: frequentPlaces,
-      notes,
+      notes: encodeElderNotes(notes, {
+        preferLowFloorBus,
+        preferElevator,
+        avoidTransfers,
+        needRestStops,
+        slowPace,
+      }),
       phone,
       district,
       max_walk_min: maxWalkMin,
@@ -392,7 +444,11 @@ export async function getElderInfo(elderId) {
     .eq('id', elderId)
     .maybeSingle()
 
-  return data || null
+  if (!data) return null
+  return {
+    ...data,
+    ...decodeElderNotes(data.notes),
+  }
 }
 
 // 보호자 Supabase 프로필을 localStorage에 반영
@@ -457,6 +513,11 @@ export async function syncElderProfileFromSupabase(elderId) {
     maxWalkMin: info.max_walk_min || 20,
     allowStairs: info.allow_stairs ?? false,
     mobilityAid: info.mobility_aid ?? false,
+    preferLowFloorBus: info.prefer_low_floor_bus ?? DEFAULT_PROFILE.preferLowFloorBus,
+    preferElevator: info.prefer_elevator ?? DEFAULT_PROFILE.preferElevator,
+    avoidTransfers: info.avoid_transfers ?? DEFAULT_PROFILE.avoidTransfers,
+    needRestStops: info.need_rest_stops ?? DEFAULT_PROFILE.needRestStops,
+    slowPace: info.slow_pace ?? DEFAULT_PROFILE.slowPace,
     guardianPhone: info.phone || '',
     healthNotes: info.notes || '',
     favorites: syncedFavorites,
