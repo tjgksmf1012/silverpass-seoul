@@ -130,7 +130,7 @@ function isInSeoul(lat, lng) {
     lng <= SEOUL_BOUNDS.maxLng
 }
 
-export default function RouteMap({ destination, placeCoords, startPlace, viaPlace, routeGuide, onCoordsReady }) {
+export default function RouteMap({ destination, searchKeyword, placeCoords, startPlace, viaPlace, routeGuide, onCoordsReady }) {
   const mapDivRef   = useRef(null)
   const mapRef      = useRef(null)
   const overlayRef  = useRef([])
@@ -284,7 +284,8 @@ export default function RouteMap({ destination, placeCoords, startPlace, viaPlac
           onDestKnown(placeCoords.lat, placeCoords.lng)
         } else {
           const ps = new kakao.maps.services.Places()
-          const keyword = String(destination).includes('서울') ? destination : `서울 ${destination}`
+          const queryText = searchKeyword || destination
+          const keyword = String(queryText).includes('서울') ? queryText : `서울 ${queryText}`
           ps.keywordSearch(
             keyword,
             (data, searchStatus) => {
@@ -308,7 +309,7 @@ export default function RouteMap({ destination, placeCoords, startPlace, viaPlac
       overlayRef.current = []
       if (polylineRef.current) { try { polylineRef.current.setMap(null) } catch {} polylineRef.current = null }
     }
-  }, [destination, placeCoords, startPlace, viaPlace, routeGuide])
+  }, [destination, searchKeyword, placeCoords, startPlace, viaPlace, routeGuide])
 
   return (
     <div style={{

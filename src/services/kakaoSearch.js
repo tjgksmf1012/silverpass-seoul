@@ -14,10 +14,18 @@ function loadSDK() {
   return sdkPromise
 }
 
-export async function searchPlaces(query) {
+export async function searchPlaces(query, options = {}) {
+  if (!KAKAO_KEY) return []
   await loadSDK()
   return new Promise(resolve => {
     const ps = new window.kakao.maps.services.Places()
+    const lat = Number(options.location?.lat)
+    const lng = Number(options.location?.lng)
+    const hasLocation = Number.isFinite(lat) && Number.isFinite(lng)
+    const searchOptions = hasLocation
+      ? { location: new window.kakao.maps.LatLng(lat, lng), radius: options.radius || 5000, sort: window.kakao.maps.services.SortBy.DISTANCE }
+      : { location: new window.kakao.maps.LatLng(37.5665, 126.9780), radius: 20000 }
+
     ps.keywordSearch(query, (data, status) => {
       if (status !== window.kakao.maps.services.Status.OK) { resolve([]); return }
       resolve(data.slice(0, 5).map(p => ({
@@ -28,6 +36,6 @@ export async function searchPlaces(query) {
         lat: parseFloat(p.y),
         lng: parseFloat(p.x),
       })))
-    }, { location: new window.kakao.maps.LatLng(37.5665, 126.9780), radius: 20000 })
+    }, searchOptions)
   })
 }

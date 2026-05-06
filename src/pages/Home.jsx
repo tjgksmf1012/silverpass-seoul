@@ -202,6 +202,8 @@ export default function Home() {
   }
 
   const visibleFavorites = (profile.favorites || []).filter(f => f.showOnHome !== false)
+  const nearbyFavorites = visibleFavorites.filter(f => !f.address && f.name !== '집')
+  const registeredFavorites = visibleFavorites.filter(f => f.address)
 
   return (
     <div className="senior-page">
@@ -346,8 +348,7 @@ export default function Home() {
 
         {/* 보호자 등록 빠른 목적지 */}
         {(() => {
-          const favDests = visibleFavorites
-            .filter(f => f.address)
+          const favDests = registeredFavorites
             .map(f => ({ label: `${f.icon || '📍'} ${f.name}`, dest: f.address }))
           const homeDest = profile.homeAddress
             ? [{ label: '🏠 집으로', dest: profile.homeAddress }]
@@ -381,9 +382,9 @@ export default function Home() {
                   </button>
                 ))}
               </div>
-              {!visibleFavorites.some(f => f.address) && profile.homeAddress && (
+              {!registeredFavorites.length && profile.homeAddress && (
                 <p style={{ color: '#64748B', fontSize: 13, fontWeight: 600, margin: '8px 0 0' }}>
-                  보호자가 자주 가는 곳을 등록하면 여기에 함께 보여요
+                  보호자가 목적지를 등록하면 여기에 함께 보여요
                 </p>
               )}
             </div>
@@ -412,11 +413,11 @@ export default function Home() {
           </button>
         )}
 
-        {/* 자주 가는 곳 */}
+        {/* 가까운 곳 */}
         <div>
-          <p className="senior-section-title">자주 가는 곳</p>
+          <p className="senior-section-title">가까운 곳</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-            {visibleFavorites.map(fav => {
+            {nearbyFavorites.map(fav => {
               const cfg = FAV_CONFIG[fav.name] || DEFAULT_FAV
               const { Icon } = cfg
               return (
@@ -459,13 +460,13 @@ export default function Home() {
               )
             })}
           </div>
-          {!visibleFavorites.length && (
+          {!nearbyFavorites.length && (
             <div style={{
               border: '1.5px dashed #BFEFE6', background: '#fff',
               borderRadius: 18, padding: '18px 14px', color: '#0F766E',
               fontSize: 16, fontWeight: 800, textAlign: 'center',
             }}>
-              보호자가 등록하면 여기에 보여요
+              복지관, 병원, 약국처럼 주변에서 찾을 곳을 켜두면 여기에 보여요
             </div>
           )}
         </div>

@@ -86,6 +86,10 @@ function routeDistanceLabel(meters) {
   return meters >= 1000 ? `${(meters / 1000).toFixed(1)}km` : `${meters}m`
 }
 
+function hasCoords(place) {
+  return Number.isFinite(Number(place?.lat)) && Number.isFinite(Number(place?.lng))
+}
+
 function getRouteCriteria(route, index, routes = []) {
   const candidates = routes.filter(Boolean)
   if (!route || !candidates.length) {
@@ -126,13 +130,25 @@ export default function Route_() {
   const [pointQuery, setPointQuery]       = useState('')
   const [pointSuggestions, setPointSuggestions] = useState([])
   const [pointSearching, setPointSearching] = useState(false)
+  const [resolvedDestinationPlace, setResolvedDestinationPlace] = useState(null)
+  const [destinationResolving, setDestinationResolving] = useState(false)
+  const [destinationResolveNote, setDestinationResolveNote] = useState('')
   const coordsApplied = useRef(false)
 
   const profile = getProfile()
-  const destination = state?.parsed?.destination || state?.query || '목적지'
-  const placeCoords = useMemo(() => (state?.parsed?.lat && state?.parsed?.lng)
-    ? { lat: state.parsed.lat, lng: state.parsed.lng }
-    : null, [state?.parsed?.lat, state?.parsed?.lng])
+  const baseDestination = state?.parsed?.destination || state?.query || '목적지'
+  const destinationCategory = state?.parsed?.category || ''
+  const hasFixedDestination = Boolean(state?.parsed?.address || (state?.parsed?.lat && state?.parsed?.lng))
+  const destination = resolvedDestinationPlace?.name || baseDestination
+  const destinationSearchKeyword = resolvedDestinationPlace?.address || state?.parsed?.address || destination
+  const placeCoords = useMemo(() => {
+    if (hasCoords(resolvedDestinationPlace)) {
+      return { lat: resolvedDestinationPlace.lat, lng: resolvedDestinationPlace.lng }
+    }
+    return (state?.parsed?.lat && state?.parsed?.lng)
+      ? { lat: state.parsed.lat, lng: state.parsed.lng }
+      : null
+  }, [resolvedDestinationPlace, state?.parsed?.lat, state?.parsed?.lng])
 
   function resetTransitRoute() {
     coordsApplied.current = false
@@ -183,6 +199,52 @@ export default function Route_() {
       setPointSearching(false)
     }
   }
+
+  useEffect(() => {
+    const shouldResolveNearStart =
+      destinationCategory &&
+      !hasFixedDestination &&
+      hasCoords(manualStart)
+
+    if (!shouldResolveNearStart) {
+      setResolvedDestinationPlace(null)
+      setDestinationResolving(false)
+      setDestinationResolveNote('')
+      return
+    }
+
+    let cancelled = false
+    async function resolveDestinationNearStart() {
+      setDestinationResolving(true)
+      setResolvedDestinationPlace(null)
+      setDestinationResolveNote(`${manualStart.name} 근처 ${destinationCategory}을 다시 찾는 중이에요`)
+      resetTransitRoute()
+      try {
+        const results = await searchPlaces(destinationCategory, {
+          location: { lat: manualStart.lat, lng: manualStart.lng },
+          radius: 7000,
+        })
+        if (cancelled) return
+        const place = results[0]
+        if (place) {
+          setResolvedDestinationPlace({ ...place, category: destinationCategory, anchorName: manualStart.name })
+          setDestinationResolveNote(`${manualStart.name} 근처 ${destinationCategory}으로 목적지를 다시 맞췄어요`)
+        } else {
+          setDestinationResolveNote(`${manualStart.name} 근처 ${destinationCategory}을 찾지 못해 기존 검색어를 유지했어요`)
+        }
+        resetTransitRoute()
+      } catch {
+        if (!cancelled) {
+          setDestinationResolveNote(`${manualStart.name} 근처 장소를 다시 찾지 못해 기존 검색어를 유지했어요`)
+        }
+      } finally {
+        if (!cancelled) setDestinationResolving(false)
+      }
+    }
+
+    resolveDestinationNearStart()
+    return () => { cancelled = true }
+  }, [destinationCategory, hasFixedDestination, manualStart?.lat, manualStart?.lng, manualStart?.name])
 
   // ── 초기 로드 ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -531,6 +593,28 @@ export default function Route_() {
               )}
             </div>
           )}
+
+          {destinationCategory && !hasFixedDestination && (
+            <div style={{
+              marginTop: 12,
+              background: resolvedDestinationPlace ? '#F0FDFA' : '#F8FAFC',
+              border: `1px solid ${resolvedDestinationPlace ? '#CCFBF1' : '#E2E8F0'}`,
+              borderRadius: 14,
+              padding: '11px 12px',
+            }}>
+              <p style={{ fontSize: 13, color: resolvedDestinationPlace ? '#0F766E' : '#475569', fontWeight: 900, margin: '0 0 3px' }}>
+                {destinationResolving ? '출발지 근처 목적지를 다시 찾는 중' : '출발지 기준 근처 검색'}
+              </p>
+              <p style={{ fontSize: 12, color: '#64748B', fontWeight: 700, lineHeight: 1.45, margin: 0 }}>
+                {destinationResolveNote || `출발지를 바꾸면 그 위치 근처의 ${destinationCategory}으로 목적지를 다시 맞춰요.`}
+              </p>
+              {resolvedDestinationPlace?.address && (
+                <p style={{ fontSize: 12, color: '#0F766E', fontWeight: 800, lineHeight: 1.45, margin: '4px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {resolvedDestinationPlace.address}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── 이동 안전 체크 ── */}
@@ -570,6 +654,7 @@ export default function Route_() {
         <div style={{ order: 3 }}>
           <RouteMap
             destination={destination}
+            searchKeyword={destinationSearchKeyword}
             placeCoords={placeCoords}
             startPlace={manualStart}
             viaPlace={viaPlace}
