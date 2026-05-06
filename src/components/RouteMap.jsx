@@ -363,15 +363,19 @@ function stepStopPreview(step) {
   return stops.length > 5 ? `${label}: ${preview} 외 ${stops.length - 5}곳` : `${label}: ${preview}`
 }
 
-function stepInstructionItems(step, direction) {
+function stepInstructionItems(step, direction, nextStep) {
   if (!step) return []
   const start = step.startStationName || step.startName || '출발지'
   const end = step.endName || '도착 지점'
   if (step.type === 'walk') {
+    const nextMarker =
+      nextStep?.type === 'bus' ? '버스 타는 곳' :
+      nextStep?.type === 'subway' ? '지하철 타는 곳' :
+      '다음 표식'
     return [
       `${direction ? `${direction.label} 방향으로 ` : '지도 위 파란 선 방향으로 '}${walkDistanceText(step)} 이동`,
       '횡단보도와 보행로를 우선해서 천천히 이동',
-      '지도에서 도보 끝 표식을 찾으면 다음 안내 확인',
+      `지도에서 ${nextMarker}을 찾으면 다음 안내 확인`,
     ]
   }
   if (step.type === 'bus') {
@@ -684,7 +688,7 @@ export default function RouteMap({
   const activeDirection = activeStepPoints.length >= 2
     ? bearingInfo(activeStepPoints[0], activeStepPoints[activeStepPoints.length - 1])
     : null
-  const activeInstructionItems = stepInstructionItems(activeMapStep, activeDirection)
+  const activeInstructionItems = stepInstructionItems(activeMapStep, activeDirection, stepsForMap[safeStepIndex + 1])
   const previousMapStep = safeStepIndex > 0 ? stepsForMap[safeStepIndex - 1] : null
   const nextMapStep = safeStepIndex < stepsForMap.length - 1 ? stepsForMap[safeStepIndex + 1] : null
   const canFocusStep = hasStartForMap && stepsForMap.length > 1

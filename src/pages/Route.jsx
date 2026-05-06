@@ -564,7 +564,7 @@ export default function Route_() {
     if (index === 0) {
       return {
         title: `${nextPlace || '첫 승차 지점'}까지 걷기`,
-        detail: '현재 위치에서 출발해요.',
+        detail: `${startDisplay}에서 출발해요.`,
         meta,
       }
     }
