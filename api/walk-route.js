@@ -6,6 +6,7 @@ const SEOUL_BOUNDS = {
 }
 
 const MAX_DIRECT_DISTANCE_M = 3500
+const TMAP_KEY = process.env.TMAP_API_KEY || process.env.SK_OPENAPI_APP_KEY || ''
 
 function numberOrNull(value) {
   const number = Number(value)
@@ -42,6 +43,115 @@ function compactPoints(points) {
   }, [])
 }
 
+function maneuverPoint(step) {
+  const location = step?.maneuver?.location
+  if (!Array.isArray(location) || location.length < 2) return null
+  const [lng, lat] = location
+  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return null
+  return { lat: Number(lat), lng: Number(lng) }
+}
+
+function routeSteps(route) {
+  return (route?.legs?.[0]?.steps || [])
+    .filter(step => Number(step?.distance) > 0 || step?.maneuver?.type === 'arrive')
+    .slice(0, 16)
+    .map(step => ({
+      name: step.name || '',
+      distance: Math.round(step.distance || 0),
+      duration: Math.max(1, Math.round((step.duration || 0) / 60)),
+      maneuver: step.maneuver?.type || '',
+      modifier: step.maneuver?.modifier || '',
+      bearingBefore: step.maneuver?.bearing_before ?? null,
+      bearingAfter: step.maneuver?.bearing_after ?? null,
+      point: maneuverPoint(step),
+    }))
+}
+
+function compactTmapLinePoints(features = []) {
+  return compactPoints(features.flatMap(feature => {
+    const coords = feature?.geometry?.coordinates
+    if (feature?.geometry?.type === 'LineString' && Array.isArray(coords)) {
+      return coords.map(([lng, lat]) => ({ lat, lng }))
+    }
+    if (feature?.geometry?.type === 'MultiLineString' && Array.isArray(coords)) {
+      return coords.flatMap(line => line.map(([lng, lat]) => ({ lat, lng })))
+    }
+    return []
+  }))
+}
+
+function tmapPoint(feature) {
+  const coords = feature?.geometry?.coordinates
+  if (!Array.isArray(coords) || coords.length < 2) return null
+  const [lng, lat] = coords
+  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return null
+  return { lat: Number(lat), lng: Number(lng) }
+}
+
+function normalizeTmapStep(feature, index) {
+  const properties = feature?.properties || {}
+  const description = properties.description || properties.name || ''
+  const point = tmapPoint(feature)
+  if (!description && !point) return null
+  const maneuver = properties.turnType || properties.pointType || (index === 0 ? 'depart' : '')
+  return {
+    name: description,
+    distance: Math.round(properties.distance || 0),
+    duration: Math.max(1, Math.round((properties.time || 0) / 60)),
+    maneuver: String(maneuver),
+    modifier: description,
+    point,
+    description,
+    provider: 'tmap',
+  }
+}
+
+async function getTmapWalkingRoute(start, end) {
+  if (!TMAP_KEY) return null
+  const url = new URL('https://apis.openapi.sk.com/tmap/routes/pedestrian')
+  url.searchParams.set('version', '1')
+  url.searchParams.set('format', 'json')
+
+  const upstream = await fetch(url, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      appKey: TMAP_KEY,
+    },
+    body: JSON.stringify({
+      startX: start.lng,
+      startY: start.lat,
+      endX: end.lng,
+      endY: end.lat,
+      startName: '출발지',
+      endName: '도착지',
+      reqCoordType: 'WGS84GEO',
+      resCoordType: 'WGS84GEO',
+      searchOption: 0,
+    }),
+    signal: AbortSignal.timeout(6500),
+  })
+  if (!upstream.ok) return null
+  const json = await upstream.json()
+  const features = json?.features || []
+  const points = compactTmapLinePoints(features)
+  if (points.length < 2) return null
+  const summary = features.find(feature => feature?.properties?.totalDistance)?.properties || {}
+  const steps = features
+    .filter(feature => feature?.geometry?.type === 'Point')
+    .map(normalizeTmapStep)
+    .filter(Boolean)
+    .slice(0, 16)
+  return {
+    source: 'TMAP pedestrian',
+    distance: Math.round(summary.totalDistance || directDistance(start, end)),
+    duration: Math.max(1, Math.round((summary.totalTime || 0) / 60)) || Math.max(1, Math.ceil(directDistance(start, end) / 65)),
+    points,
+    steps,
+  }
+}
+
 export default async function handler(req, res) {
   const start = {
     lat: numberOrNull(req.query.startLat),
@@ -61,6 +171,14 @@ export default async function handler(req, res) {
   if (directDistance(start, end) > MAX_DIRECT_DISTANCE_M) {
     return res.status(400).json({ error: 'walk_segment_too_long' })
   }
+
+  try {
+    const tmapRoute = await getTmapWalkingRoute(start, end)
+    if (tmapRoute) {
+      res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=604800')
+      return res.status(200).json(tmapRoute)
+    }
+  } catch {}
 
   const url = new URL(`https://router.project-osrm.org/route/v1/foot/${start.lng},${start.lat};${end.lng},${end.lat}`)
   url.searchParams.set('overview', 'full')
@@ -89,12 +207,7 @@ export default async function handler(req, res) {
       distance: Math.round(route.distance || directDistance(start, end)),
       duration: Math.max(1, Math.round((route.duration || 0) / 60)),
       points,
-      steps: (route.legs?.[0]?.steps || []).slice(0, 10).map(step => ({
-        name: step.name || '',
-        distance: Math.round(step.distance || 0),
-        duration: Math.max(1, Math.round((step.duration || 0) / 60)),
-        maneuver: step.maneuver?.type || '',
-      })),
+      steps: routeSteps(route),
     })
   } catch (error) {
     return res.status(504).json({ error: 'walk_route_timeout' })

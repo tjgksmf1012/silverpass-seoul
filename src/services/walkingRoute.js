@@ -14,6 +14,10 @@ function directDistance(start, end) {
   return radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
+function estimateWalkMinutes(distance) {
+  return Math.max(1, Math.ceil((Number(distance) || 0) / 55))
+}
+
 function compactPoints(points) {
   return points.filter(hasCoords).reduce((acc, point) => {
     const normalized = { lat: Number(point.lat), lng: Number(point.lng) }
@@ -25,26 +29,64 @@ function compactPoints(points) {
   }, [])
 }
 
+function maneuverPoint(step) {
+  const location = step?.maneuver?.location
+  if (!Array.isArray(location) || location.length < 2) return null
+  const [lng, lat] = location
+  return hasCoords({ lat, lng }) ? { lat: Number(lat), lng: Number(lng) } : null
+}
+
+function normalizeWalkingStep(step) {
+  if (!step) return null
+  const point = hasCoords(step.point) ? { lat: Number(step.point.lat), lng: Number(step.point.lng) } : maneuverPoint(step)
+  return {
+    name: step.name || '',
+    description: step.description || '',
+    provider: step.provider || '',
+    distance: Math.round(Number(step.distance) || 0),
+    duration: Math.max(1, Math.round(Number(step.duration) || 0)),
+    maneuver: step.maneuver?.type || step.maneuver || '',
+    modifier: step.maneuver?.modifier || step.modifier || '',
+    bearingBefore: step.maneuver?.bearing_before ?? step.bearingBefore ?? null,
+    bearingAfter: step.maneuver?.bearing_after ?? step.bearingAfter ?? null,
+    point,
+  }
+}
+
 function normalizeWalkingRouteData(data, start, end) {
   const route = data?.routes?.[0]
   const rawPoints = data?.points || route?.geometry?.coordinates?.map(([lng, lat]) => ({ lat, lng })) || []
   const points = compactPoints(rawPoints)
   if (points.length < 2) return null
   const direct = directDistance(start, end)
+  const distance = Number(data?.distance ?? route?.distance) || Math.round(direct)
   return {
     source: data?.source || 'walking-route',
-    distance: Number(data?.distance ?? route?.distance) || Math.round(direct),
-    duration: Number(data?.duration) || Math.max(1, Math.round(Number(route?.duration || 0) / 60)) || Math.max(1, Math.ceil(direct / 65)),
+    distance,
+    duration: Math.max(
+      estimateWalkMinutes(distance),
+      Number(data?.duration) || Math.max(1, Math.round(Number(route?.duration || 0) / 60)),
+    ),
     points,
-    steps: Array.isArray(data?.steps)
+    steps: (Array.isArray(data?.steps)
       ? data.steps
-      : (route?.legs?.[0]?.steps || []).slice(0, 10).map(step => ({
-        name: step.name || '',
-        distance: Math.round(step.distance || 0),
+      : (route?.legs?.[0]?.steps || []).slice(0, 16).map(step => ({
+        ...step,
         duration: Math.max(1, Math.round((step.duration || 0) / 60)),
-        maneuver: step.maneuver?.type || '',
-      })),
+      })))
+      .map(normalizeWalkingStep)
+      .filter(Boolean),
   }
+}
+
+function canTrustWalkingRoute(step, walkingRoute) {
+  if (!walkingRoute?.points?.length) return false
+  if (/tmap|kakao/i.test(walkingRoute.source || '')) return true
+  const expected = Number(step?.distance)
+  if (!Number.isFinite(expected) || expected <= 30) return true
+  const routed = Number(walkingRoute.distance)
+  if (!Number.isFinite(routed)) return true
+  return routed <= Math.max(expected * 2.4, expected + 350)
 }
 
 async function getWalkingRouteFromOsrm(start, end) {
@@ -98,6 +140,7 @@ export async function getWalkingRoute(start, end) {
     startLng: String(start.lng),
     endLat: String(end.lat),
     endLng: String(end.lng),
+    detail: 'turns-v2',
   })
 
   try {
@@ -120,16 +163,19 @@ export async function enhanceRouteWalkingGeometry(route, routeStart, routeEnd) {
     if (!endpoints) return step
 
     const walkingRoute = await getWalkingRoute(endpoints.start, endpoints.end)
-    if (!walkingRoute?.points?.length) {
+    if (!canTrustWalkingRoute(step, walkingRoute)) {
       return {
         ...step,
         startPoint: step.startPoint || endpoints.start,
         endPoint: step.endPoint || endpoints.end,
+        routeDetailIssue: '정밀 보행망이 필요해 기본 도보 안내를 유지해요',
       }
     }
 
     return {
       ...step,
+      distance: Math.round(walkingRoute.distance),
+      sectionTime: walkingRoute.duration,
       startPoint: endpoints.start,
       endPoint: endpoints.end,
       routePoints: walkingRoute.points,
@@ -140,9 +186,29 @@ export async function enhanceRouteWalkingGeometry(route, routeStart, routeEnd) {
     }
   }))
 
+  const originalWalk = steps
+    .filter(step => step.type === 'walk')
+    .reduce((sum, step) => sum + (Number(step.distance) || 0), 0)
+  const enhancedWalk = enhancedSteps
+    .filter(step => step.type === 'walk')
+    .reduce((sum, step) => sum + (Number(step.walkingDistance) || Number(step.distance) || 0), 0)
+  const originalWalkTime = steps
+    .filter(step => step.type === 'walk')
+    .reduce((sum, step) => sum + (Number(step.sectionTime) || 0), 0)
+  const enhancedWalkTime = enhancedSteps
+    .filter(step => step.type === 'walk')
+    .reduce((sum, step) => sum + (Number(step.sectionTime) || 0), 0)
+
   return {
     ...route,
     steps: enhancedSteps,
+    totalWalk: Math.round(enhancedWalk || route.totalWalk || 0),
+    totalDistance: originalWalk > 0 && enhancedWalk > 0
+      ? Math.max(0, Math.round((Number(route.totalDistance) || 0) - originalWalk + enhancedWalk))
+      : route.totalDistance,
+    totalTime: originalWalkTime > 0 && enhancedWalkTime > 0
+      ? Math.max(0, Math.round((Number(route.totalTime) || 0) - originalWalkTime + enhancedWalkTime))
+      : route.totalTime,
     routePoints: compactPoints(enhancedSteps.flatMap(step => step.routePoints || [])),
   }
 }

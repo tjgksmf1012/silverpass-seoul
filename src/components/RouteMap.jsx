@@ -104,6 +104,17 @@ function stationDotHtml(step, name, active) {
   `
 }
 
+function walkTurnDotHtml(item, index, active) {
+  const label = turnArrow(item)
+  const road = shortText(item?.name || walkActionText(item), 9)
+  return `
+    <div style="display:flex;align-items:center;gap:5px;filter:drop-shadow(0 3px 7px rgba(37,99,235,0.25));">
+      <span style="width:${active ? 26 : 22}px;height:${active ? 26 : 22}px;border-radius:999px;background:${active ? '#2563EB' : '#fff'};color:${active ? '#fff' : '#2563EB'};border:3px solid ${active ? '#fff' : '#BFDBFE'};display:flex;align-items:center;justify-content:center;font-size:${label.length > 1 ? 10 : 14}px;font-weight:950;font-family:'Pretendard Variable','맑은 고딕',sans-serif;">${escapeHtml(label)}</span>
+      ${active ? `<span style="background:#fff;color:#1E3A8A;border:1px solid #BFDBFE;border-radius:999px;padding:3px 7px;font-size:10px;font-weight:900;font-family:'Pretendard Variable','맑은 고딕',sans-serif;white-space:nowrap;">${index + 1}. ${escapeHtml(road)}</span>` : ''}
+    </div>
+  `
+}
+
 function stepEndOverlayHtml(step, nextStep) {
   const style = STEP_STYLE[step?.type] || STEP_STYLE.walk
   let label = '도착'
@@ -294,6 +305,58 @@ function walkDistanceText(step) {
   return meta.match(/\d+(?:\.\d+)?km|\d+m/)?.[0] || '다음 지점까지'
 }
 
+function turnArrow(item = {}) {
+  const modifier = String(item.modifier || '').toLowerCase()
+  const maneuver = String(item.maneuver || '').toLowerCase()
+  if (maneuver === 'arrive') return '도착'
+  if (modifier.includes('right')) return '↱'
+  if (modifier.includes('left')) return '↰'
+  if (modifier.includes('uturn')) return '↶'
+  if (modifier.includes('straight') || maneuver === 'depart' || maneuver === 'continue') return '↑'
+  if (maneuver === 'roundabout' || maneuver === 'rotary') return '회전'
+  return '→'
+}
+
+function walkActionText(item = {}) {
+  const modifier = String(item.modifier || '').toLowerCase()
+  const maneuver = String(item.maneuver || '').toLowerCase()
+  if (maneuver === 'arrive') return '도착 지점을 확인'
+  if (maneuver === 'depart') return '출발해서 직진'
+  if (modifier.includes('sharp right')) return '크게 오른쪽'
+  if (modifier.includes('slight right')) return '비스듬히 오른쪽'
+  if (modifier.includes('right')) return '오른쪽'
+  if (modifier.includes('sharp left')) return '크게 왼쪽'
+  if (modifier.includes('slight left')) return '비스듬히 왼쪽'
+  if (modifier.includes('left')) return '왼쪽'
+  if (modifier.includes('uturn')) return '뒤돌기'
+  if (maneuver === 'new name' || maneuver === 'continue') return '계속 직진'
+  if (maneuver === 'roundabout' || maneuver === 'rotary') return '회전 구간 통과'
+  return '직진'
+}
+
+function walkInstructionLabel(item = {}, index = 0, total = 1) {
+  if (item.provider === 'tmap' && item.description) {
+    return item.description
+  }
+  const action = walkActionText(item)
+  const road = String(item.name || '').trim()
+  const distance = distanceLabel(item.distance)
+  if (action.includes('도착')) return '도착 지점 표식 확인'
+  if (index === 0) {
+    return `${road || '보행로'} 방향으로 ${distance || '잠시'} 이동`
+  }
+  const roadText = road ? `${road}에서 ` : ''
+  const distanceText = distance && index < total - 1 ? ` 후 ${distance} 이동` : ''
+  return `${roadText}${action}${distanceText}`
+}
+
+function walkInstructionItems(step, limit = 4) {
+  const steps = (step?.walkInstructions || [])
+    .filter(item => Number(item?.distance) > 0 || item?.maneuver === 'arrive')
+    .slice(0, limit)
+  return steps.map((item, index) => walkInstructionLabel(item, index, steps.length))
+}
+
 function bearingInfo(start, end) {
   if (!start || !end) return null
   const lat1 = Number(start.lat)
@@ -403,6 +466,13 @@ function stepInstructionItems(step, direction, nextStep) {
   const start = step.startStationName || step.startName || '출발지'
   const end = step.endName || '도착 지점'
   if (step.type === 'walk') {
+    const detailed = walkInstructionItems(step, 4)
+    if (detailed.length >= 2) {
+      return [
+        ...detailed,
+        '파란 선 위 번호 표식을 순서대로 따라가세요',
+      ].slice(0, 5)
+    }
     const nextMarker =
       nextStep?.type === 'bus' ? '버스 타는 곳' :
       nextStep?.type === 'subway' ? '지하철 타는 곳' :
@@ -452,6 +522,19 @@ function pickStationDots(step, active) {
     return acc
   }, [])
   if (!points.length) return []
+  const max = active ? 8 : 4
+  const stride = Math.max(1, Math.ceil(points.length / max))
+  return points.filter((_, index) => index % stride === 0).slice(0, max)
+}
+
+function pickWalkTurnDots(step, active) {
+  const points = (step?.walkInstructions || [])
+    .filter(item => Number.isFinite(Number(item?.point?.lat)) && Number.isFinite(Number(item?.point?.lng)))
+    .map(item => ({
+      ...item,
+      point: { lat: Number(item.point.lat), lng: Number(item.point.lng) },
+    }))
+    .filter((item, index) => index > 0 || active)
   const max = active ? 8 : 4
   const stride = Math.max(1, Math.ceil(points.length / max))
   return points.filter((_, index) => index % stride === 0).slice(0, max)
@@ -611,7 +694,18 @@ export default function RouteMap({
                   overlayRef.current.push(endOverlay)
                 }
 
-                if (segment.step?.type !== 'walk') {
+                if (segment.step?.type === 'walk') {
+                  pickWalkTurnDots(segment.step, active).forEach((item, pointIndex) => {
+                    const turnOverlay = new kakao.maps.CustomOverlay({
+                      position: new kakao.maps.LatLng(item.point.lat, item.point.lng),
+                      content: walkTurnDotHtml(item, pointIndex, active),
+                      yAnchor: 0.5,
+                      zIndex: active ? 22 : 14,
+                    })
+                    turnOverlay.setMap(map)
+                    overlayRef.current.push(turnOverlay)
+                  })
+                } else if (segment.step) {
                   pickStationDots(segment.step, active).forEach(point => {
                     const stationOverlay = new kakao.maps.CustomOverlay({
                       position: new kakao.maps.LatLng(point.lat, point.lng),

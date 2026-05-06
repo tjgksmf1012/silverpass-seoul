@@ -238,21 +238,65 @@ function subwayDoorText(step) {
   return '승강기 표지 가까운 칸'
 }
 
+function walkActionText(item = {}) {
+  const modifier = String(item.modifier || '').toLowerCase()
+  const maneuver = String(item.maneuver || '').toLowerCase()
+  if (maneuver === 'arrive') return '도착 지점을 확인'
+  if (maneuver === 'depart') return '출발해서 직진'
+  if (modifier.includes('sharp right')) return '크게 오른쪽'
+  if (modifier.includes('slight right')) return '비스듬히 오른쪽'
+  if (modifier.includes('right')) return '오른쪽'
+  if (modifier.includes('sharp left')) return '크게 왼쪽'
+  if (modifier.includes('slight left')) return '비스듬히 왼쪽'
+  if (modifier.includes('left')) return '왼쪽'
+  if (modifier.includes('uturn')) return '뒤돌기'
+  if (maneuver === 'new name' || maneuver === 'continue') return '계속 직진'
+  if (maneuver === 'roundabout' || maneuver === 'rotary') return '회전 구간 통과'
+  return '직진'
+}
+
+function walkTurnLabel(item = {}, index = 0, total = 1) {
+  if (item.provider === 'tmap' && item.description) {
+    return item.description
+  }
+  const action = walkActionText(item)
+  const road = String(item.name || '').trim()
+  const distance = Number(item.distance)
+  const distanceText = Number.isFinite(distance) && distance > 0
+    ? (distance >= 1000 ? `${(distance / 1000).toFixed(1)}km` : `${Math.round(distance)}m`)
+    : ''
+  if (action.includes('도착')) return '도착 지점 표식 확인'
+  if (index === 0) return `${road || '보행로'} 방향으로 ${distanceText || '잠시'} 이동`
+  const roadText = road ? `${road}에서 ` : ''
+  const moveText = distanceText && index < total - 1 ? ` 후 ${distanceText} 이동` : ''
+  return `${roadText}${action}${moveText}`
+}
+
+function walkInstructionItems(step, limit = 3) {
+  const items = (step?.walkInstructions || [])
+    .filter(item => Number(item?.distance) > 0 || item?.maneuver === 'arrive')
+    .slice(0, limit)
+  return items.map((item, index) => walkTurnLabel(item, index, items.length))
+}
+
 function walkInstructionText(step, limit = 2) {
+  const turns = walkInstructionItems(step, limit)
+  if (turns.length) return turns.join(' → ')
   const names = (step?.walkInstructions || [])
     .map(item => String(item?.name || '').trim())
     .filter(Boolean)
     .filter((name, index, arr) => arr.indexOf(name) === index)
     .slice(0, limit)
-  if (!names.length) return ''
-  return `${names.join(' → ')} 따라 이동`
+  return names.length ? `${names.join(' → ')} 따라 이동` : ''
 }
 
 function guideTipsForStep(step) {
   if (!step) return []
   if (step.type === 'walk') {
+    const turns = walkInstructionItems(step, 3)
     return [
-      walkInstructionText(step) && { label: '길', value: walkInstructionText(step) },
+      turns[0] && { label: '다음', value: turns[0] },
+      turns[1] && { label: '이후', value: turns[1] },
       step.routeSource === 'walking-route' && { label: '지도', value: '파란 보행 경로 우선' },
     ].filter(Boolean)
   }
@@ -633,9 +677,10 @@ export default function Route_() {
       transitDetoursTooMuch
     )
   )
+  const needsTransitApiData = hasResolvedStart && !isWalkOnlyRoute && !hasExactRoute
   const walkOnlyMinutes = walkOnlyDistance ? Math.max(5, Math.ceil(walkOnlyDistance / 45) + 3) : routeData?.duration
-  const displayPrimaryTime = hasResolvedStart ? (isWalkOnlyRoute ? walkOnlyMinutes : primaryTime) : null
-  const displayPrimaryWalk = hasResolvedStart ? (isWalkOnlyRoute ? walkOnlyDistance : primaryWalk) : null
+  const displayPrimaryTime = hasResolvedStart ? (isWalkOnlyRoute ? walkOnlyMinutes : (hasExactRoute ? primaryTime : null)) : null
+  const displayPrimaryWalk = hasResolvedStart ? (isWalkOnlyRoute ? walkOnlyDistance : (hasExactRoute ? primaryWalk : null)) : null
   const routeBadge = !hasResolvedStart
     ? '출발지 필요'
     : isWalkOnlyRoute
@@ -696,6 +741,20 @@ export default function Route_() {
   }
 
   const fallbackRouteSteps = (() => {
+    if (needsTransitApiData) {
+      return [{
+        type: 'walk',
+        title: '정확한 대중교통 경로 확인 필요',
+        distance: 0,
+        sectionTime: 0,
+        detail: transitIssue
+          ? `ODsay 경로 API 응답을 먼저 확인해야 해요. (${transitIssue})`
+          : '출발지와 목적지는 확인됐지만 정류장, 환승, 승하차 순서를 아직 확정하지 못했어요.',
+        meta: '정류장·환승 정보 없음',
+        routeDetailIssue: transitIssue || 'transit-route-missing',
+      }]
+    }
+
     if (isWalkOnlyRoute) {
       return [{
         type: 'walk',
@@ -778,7 +837,7 @@ export default function Route_() {
       return {
         icon: '🚶',
         title: walkText.title,
-        body: walkDetail ? `${walkText.detail} ${walkDetail}하세요.` : walkText.detail,
+        body: walkDetail ? `${walkText.detail} ${walkDetail} 순서로 이동하세요.` : walkText.detail,
         meta: walkText.meta,
         detail: step.routeSource === 'walking-route'
           ? '지도 위 파란 보행 경로를 먼저 보고, 횡단보도와 보행로를 따라 천천히 이동하세요.'
@@ -821,7 +880,7 @@ export default function Route_() {
   })
   const activeGuideIndex = Math.min(currentGuideStep, Math.max(guideSteps.length - 1, 0))
   const activeGuide = guideSteps[activeGuideIndex]
-  const mapRouteGuide = !hasResolvedStart
+  const mapRouteGuide = !hasResolvedStart || needsTransitApiData
     ? null
     : isWalkOnlyRoute || !hasExactRoute
       ? { steps: fullRouteSteps, totalDistance: displayPrimaryWalk, totalTime: displayPrimaryTime }
