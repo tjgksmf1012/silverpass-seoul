@@ -52,6 +52,12 @@ const BURDEN_BADGE = {
   high:   { bg: '#FEF2F2', text: '#991B1B', label: '힘듦' },
 }
 
+function greetingName(name) {
+  const clean = (name || '').trim()
+  if (!clean || clean === '어르신') return '어르신,'
+  return clean.endsWith('님') ? `${clean},` : `${clean}님,`
+}
+
 export default function Home() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
@@ -220,7 +226,7 @@ export default function Home() {
           <div>
             <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.78)', fontWeight: 700, margin: 0 }}>{GREETING}</p>
             <h1 style={{ fontSize: 30, fontWeight: 900, color: '#fff', margin: '6px 0 0', lineHeight: 1.18 }}>
-              {displayName ? `${displayName}님,` : '실버패스 서울'}
+              {greetingName(displayName)}
               <br />
               <span style={{ color: '#A7F3D0' }}>어디 가실 건가요?</span>
             </h1>
@@ -276,7 +282,11 @@ export default function Home() {
                 fontFamily: 'inherit',
               }}
             />
-            <button onClick={startVoice} style={{
+            <button
+              onClick={startVoice}
+              aria-label={listening ? '음성 입력 듣는 중' : '음성으로 목적지 말하기'}
+              title={listening ? '음성 입력 듣는 중' : '음성으로 목적지 말하기'}
+              style={{
               width: 58, height: 58, borderRadius: 16, border: 'none', cursor: 'pointer',
               background: listening ? '#FEE2E2' : '#F0FDFA',
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,

@@ -190,7 +190,9 @@ export default function Route_() {
   const coordsApplied = useRef(false)
 
   const profile = getProfile()
-  const baseDestination = state?.parsed?.destination || state?.query || '목적지'
+  const routeRequestText = state?.parsed?.destination || state?.parsed?.address || state?.query || ''
+  const hasRouteRequest = Boolean(routeRequestText || state?.parsed?.lat || state?.parsed?.lng)
+  const baseDestination = routeRequestText
   const knownDestinationPlace = useMemo(
     () => findKnownSeoulPlace(state?.parsed?.address || baseDestination),
     [state?.parsed?.address, baseDestination]
@@ -311,6 +313,10 @@ export default function Route_() {
   // ── 초기 로드 ──────────────────────────────────────────────────────────────
   useEffect(() => {
     async function load() {
+      if (!hasRouteRequest) {
+        setLoading(false)
+        return
+      }
       try {
         const user = getCurrentUser()
         const elderInfo = user ? await getElderInfo(user.id) : null
@@ -410,6 +416,26 @@ export default function Route_() {
     }
     loadSelectedBusRealtime()
   }, [transitRoutes, selectedRoute])
+
+  if (!hasRouteRequest) return (
+    <div style={{ minHeight: '100vh', background: '#F3F7FA', padding: '54px 20px 32px', display: 'flex', flexDirection: 'column' }}>
+      <button onClick={() => navigate('/')} aria-label="홈으로 돌아가기" style={{ width: 48, height: 48, borderRadius: 14, border: '1.5px solid #CBD5E1', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, marginBottom: 28 }}>
+        <ArrowLeft size={22} color="#0F172A" />
+      </button>
+      <div style={{ background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 24, padding: '28px 22px', textAlign: 'center', boxShadow: '0 8px 24px rgba(15,23,42,0.08)' }}>
+        <div style={{ width: 64, height: 64, borderRadius: 20, background: '#F0FDFA', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+          <SearchIcon size={32} color="#0D9488" stroke={2.2} />
+        </div>
+        <h1 style={{ fontSize: 24, fontWeight: 950, color: '#0F172A', margin: '0 0 8px' }}>목적지를 먼저 선택해 주세요</h1>
+        <p style={{ fontSize: 16, fontWeight: 700, color: '#64748B', lineHeight: 1.6, margin: '0 0 20px' }}>
+          홈 화면에서 목적지를 검색하거나 가까운 곳을 누르면 정확한 전체 경로를 보여드려요.
+        </p>
+        <button onClick={() => navigate('/')} style={{ width: '100%', border: 'none', borderRadius: 16, background: 'linear-gradient(135deg, #0F766E, #0D9488)', color: '#fff', fontSize: 18, fontWeight: 900, minHeight: 58, cursor: 'pointer', fontFamily: 'inherit' }}>
+          홈에서 목적지 찾기
+        </button>
+      </div>
+    </div>
+  )
 
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, background: '#F8F9FA', padding: '0 24px' }}>
@@ -613,12 +639,12 @@ export default function Route_() {
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 {row.type === 'start' && manualStart && (
-                  <button onClick={() => clearRoutePoint('start')} style={{ border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#475569', borderRadius: 12, padding: '9px 10px', fontSize: 12, fontWeight: 900, cursor: 'pointer' }}>현재위치</button>
+                  <button onClick={() => clearRoutePoint('start')} aria-label="출발지를 현재 위치로 되돌리기" style={{ border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#475569', borderRadius: 12, padding: '9px 10px', fontSize: 12, fontWeight: 900, cursor: 'pointer' }}>현재위치</button>
                 )}
                 {row.type === 'via' && viaPlace && (
-                  <button onClick={() => clearRoutePoint('via')} style={{ border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#475569', borderRadius: 12, padding: '9px 10px', fontSize: 12, fontWeight: 900, cursor: 'pointer' }}>삭제</button>
+                  <button onClick={() => clearRoutePoint('via')} aria-label="경유지 삭제" style={{ border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#475569', borderRadius: 12, padding: '9px 10px', fontSize: 12, fontWeight: 900, cursor: 'pointer' }}>삭제</button>
                 )}
-                <button onClick={() => openPointEditor(row.type)} style={{ border: 'none', background: row.type === 'start' ? '#0D9488' : '#FFF7ED', color: row.type === 'start' ? '#fff' : '#C2410C', borderRadius: 12, padding: '10px 12px', fontSize: 13, fontWeight: 950, cursor: 'pointer' }}>
+                <button onClick={() => openPointEditor(row.type)} aria-label={`${row.label} ${row.type === 'via' && !viaPlace ? '추가' : '변경'}`} style={{ border: 'none', background: row.type === 'start' ? '#0D9488' : '#FFF7ED', color: row.type === 'start' ? '#fff' : '#C2410C', borderRadius: 12, padding: '10px 12px', fontSize: 13, fontWeight: 950, cursor: 'pointer' }}>
                   {row.type === 'start' ? '변경' : (viaPlace ? '변경' : '추가')}
                 </button>
               </div>

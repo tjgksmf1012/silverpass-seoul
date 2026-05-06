@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import BottomNav from '../components/BottomNav.jsx'
 import { ArrowLeft, UserIcon, PhoneIcon, WalkIcon, SettingsIcon,
-         MapPin, CheckCircle, BuildingIcon, SeniorIcon } from '../components/Icons.jsx'
+         MapPin, CheckCircle, BuildingIcon, SeniorIcon, UsersIcon } from '../components/Icons.jsx'
 import { createDefaultProfile, getProfile, saveProfile, markVisited } from '../services/storage.js'
 import { getKakaoUser } from '../services/kakaoAuth.js'
 import { getCurrentUser, signOut, getLinkedGuardian, syncElderProfileFromSupabase, syncGuardianProfileFromSupabase } from '../services/auth.js'
@@ -93,7 +93,7 @@ export default function Profile() {
         padding: '54px 20px 26px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <button onClick={() => { markVisited(); navigate('/') }} style={{
+          <button onClick={() => { markVisited(); navigate('/') }} aria-label="홈으로 돌아가기" style={{
             width: 48, height: 48, borderRadius: 14,
             border: '1px solid rgba(255,255,255,0.25)',
             background: 'rgba(255,255,255,0.15)',
@@ -180,6 +180,7 @@ export default function Profile() {
           <div style={{ display: 'flex', gap: 8 }}>
             <input
               type="text"
+              aria-label="집 주소 검색"
               value={profile.homeAddress || ''}
               readOnly
               placeholder="주소 검색 또는 GPS"
@@ -194,6 +195,8 @@ export default function Profile() {
             />
             {/* GPS 버튼 */}
             <button
+              aria-label="GPS로 집 주소 감지"
+              title="GPS로 집 주소 감지"
               onClick={() => {
                 if (!navigator.geolocation) return
                 update('homeAddress', '감지 중…')
@@ -311,12 +314,16 @@ export default function Profile() {
         {isRouteUser ? (
           <div style={{ background: '#fff', borderRadius: 16, padding: '15px 16px', border: '1.5px solid #F1F5F9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
-              <div style={{ width: 26, height: 26, borderRadius: 7, background: '#F0FDFA', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>👨‍👩‍👧</div>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: '#F0FDFA', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <UsersIcon size={16} color="#0D9488" stroke={2.1} />
+              </div>
               <p style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', margin: 0 }}>연결된 보호자</p>
             </div>
             {linkedGuardian ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 12, background: '#EDE9FE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>👤</div>
+                <div style={{ width: 40, height: 40, borderRadius: 12, background: '#EDE9FE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <UserIcon size={21} color="#7C3AED" stroke={2.1} />
+                </div>
                 <div>
                   <p style={{ fontWeight: 700, fontSize: 15, color: '#0F172A', margin: 0 }}>{linkedGuardian.name}</p>
                   <p style={{ fontSize: 12, color: '#10B981', margin: '2px 0 0' }}>✅ 연결됨</p>
@@ -333,7 +340,7 @@ export default function Profile() {
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             fontFamily: 'inherit',
           }}>
-            👨‍👩‍👧 보호자 등록
+            <UsersIcon size={18} color="#0D9488" stroke={2.1} /> 보호자 등록
           </button>
         )}
 
