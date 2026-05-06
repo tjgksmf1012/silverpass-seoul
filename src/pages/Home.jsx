@@ -416,7 +416,7 @@ export default function Home() {
         {/* 가까운 곳 */}
         <div>
           <p className="senior-section-title">가까운 곳</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
             {nearbyFavorites.map(fav => {
               const cfg = FAV_CONFIG[fav.name] || DEFAULT_FAV
               const { Icon } = cfg
@@ -425,12 +425,12 @@ export default function Home() {
                   key={fav.id} onClick={() => handleFavoriteClick(fav)}
                   style={{
                     border: 'none', background: '#fff',
-                    borderRadius: 18, padding: '17px 10px 15px',
+                    borderRadius: 18, padding: '15px 8px 14px',
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
                     cursor: 'pointer',
                     boxShadow: '0 2px 10px rgba(0,0,0,0.07)',
                     transition: 'transform 0.12s',
-                    minHeight: 132,
+                    minHeight: 118,
                   }}
                   onTouchStart={e => { e.currentTarget.style.transform = 'scale(0.91)' }}
                   onTouchEnd={e   => { e.currentTarget.style.transform = 'scale(1)' }}
@@ -438,24 +438,14 @@ export default function Home() {
                   onMouseUp={e    => { e.currentTarget.style.transform = 'scale(1)' }}
                 >
                   <div style={{
-                    width: 58, height: 58, borderRadius: 18,
+                    width: 54, height: 54, borderRadius: 17,
                     background: cfg.grad,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     boxShadow: `0 6px 14px ${cfg.shadow}`,
                   }}>
-                    <Icon size={28} color="#fff" stroke={2} />
+                    <Icon size={27} color="#fff" stroke={2} />
                   </div>
-                  <span style={{ fontSize: 17, fontWeight: 900, color: '#1E293B', letterSpacing: 0 }}>{fav.name}</span>
-                  {fav.address && (
-                    <span style={{ fontSize: 12, color: '#64748B', maxWidth: '90%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: -3, fontWeight: 600 }}>
-                      {fav.address}
-                    </span>
-                  )}
-                  {!fav.address && (
-                    <span style={{ fontSize: 12, color: '#0D9488', maxWidth: '90%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: -3, fontWeight: 800 }}>
-                      근처 검색
-                    </span>
-                  )}
+                  <span style={{ fontSize: 16, fontWeight: 900, color: '#1E293B', letterSpacing: 0, lineHeight: 1.2 }}>{fav.name}</span>
                 </button>
               )
             })}
