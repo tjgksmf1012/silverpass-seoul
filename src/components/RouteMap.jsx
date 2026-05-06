@@ -107,6 +107,16 @@ function stepEndOverlayHtml(step) {
   `
 }
 
+function directionOverlayHtml(direction, step) {
+  const style = STEP_STYLE[step?.type] || STEP_STYLE.walk
+  return `
+    <div style="display:flex;align-items:center;gap:7px;background:#fff;border:2px solid ${style.color};border-radius:999px;padding:7px 11px;box-shadow:0 8px 18px rgba(15,23,42,0.18);font-family:'Pretendard Variable','맑은 고딕',sans-serif;">
+      <span style="width:24px;height:24px;border-radius:999px;background:${style.bg};color:${style.color};display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;">${direction.arrow}</span>
+      <span style="color:#0F172A;font-size:12px;font-weight:950;white-space:nowrap;">${escapeHtml(direction.label)} 방향</span>
+    </div>
+  `
+}
+
 function drawRouteGuideLine(kakao, map, path, source, active = false) {
   const styles = {
     walk: { color: '#2563EB', weight: 5, opacity: 0.78, style: 'shortdash' },
@@ -228,6 +238,35 @@ function distanceLabel(meters) {
   return value < 1000 ? `${Math.round(value)}m` : `${(value / 1000).toFixed(1)}km`
 }
 
+function bearingInfo(start, end) {
+  if (!start || !end) return null
+  const lat1 = Number(start.lat)
+  const lng1 = Number(start.lng)
+  const lat2 = Number(end.lat)
+  const lng2 = Number(end.lng)
+  if (![lat1, lng1, lat2, lng2].every(Number.isFinite)) return null
+  const avgLat = ((lat1 + lat2) / 2) * Math.PI / 180
+  const dx = (lng2 - lng1) * Math.cos(avgLat)
+  const dy = lat2 - lat1
+  if (Math.abs(dx) + Math.abs(dy) < 0.000001) return null
+  const angle = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360
+  const items = [
+    { label: '북쪽', arrow: '↑' },
+    { label: '북동쪽', arrow: '↗' },
+    { label: '동쪽', arrow: '→' },
+    { label: '남동쪽', arrow: '↘' },
+    { label: '남쪽', arrow: '↓' },
+    { label: '남서쪽', arrow: '↙' },
+    { label: '서쪽', arrow: '←' },
+    { label: '북서쪽', arrow: '↖' },
+  ]
+  return items[Math.round(angle / 45) % 8]
+}
+
+function latLngPoint(latLng) {
+  return latLng ? { lat: latLng.getLat(), lng: latLng.getLng() } : null
+}
+
 function isInSeoul(lat, lng) {
   return lat >= SEOUL_BOUNDS.minLat &&
     lat <= SEOUL_BOUNDS.maxLat &&
@@ -278,6 +317,32 @@ function stepStopPreview(step) {
   const label = step.type === 'subway' ? '지나는 역' : '지나는 정류장'
   const preview = stops.slice(0, 5).join(' → ')
   return stops.length > 5 ? `${label}: ${preview} 외 ${stops.length - 5}곳` : `${label}: ${preview}`
+}
+
+function stepInstructionItems(step, direction) {
+  if (!step) return []
+  const start = step.startStationName || step.startName || '출발지'
+  const end = step.endName || '도착 지점'
+  if (step.type === 'walk') {
+    return [
+      `${direction ? `${direction.label} 방향으로 ` : ''}${distanceLabel(step.distance) || '표시된 거리'} 이동`,
+      '횡단보도와 보행로를 우선해서 천천히 이동',
+      '지도에서 도보 끝 표식을 찾으면 다음 안내 확인',
+    ]
+  }
+  if (step.type === 'bus') {
+    const busText = routeStepLabel(step)
+    return [
+      `${start} 정류장에서 ${busText} 확인`,
+      step.stationCount ? `${step.stationCount}정류장 이동 후 하차` : `${end}에서 하차`,
+      `${end} 표식이 보이면 내릴 준비`,
+    ]
+  }
+  return [
+    `${start}에서 ${step.way ? `${step.way} 방면 ` : ''}${routeStepLabel(step)} 탑승`,
+    step.stationCount ? `${step.stationCount}개 역 이동` : `${end}까지 이동`,
+    `${end}에서 하차 후 출구·승강기 안내 확인`,
+  ]
 }
 
 function pickStationDots(step, active) {
@@ -444,6 +509,20 @@ export default function RouteMap({
                 overlayRef.current.push(stepOverlay)
 
                 if (active && segment.path.length >= 2) {
+                  const startPoint = latLngPoint(segment.path[0])
+                  const endPoint = latLngPoint(segment.path[segment.path.length - 1])
+                  const direction = bearingInfo(startPoint, endPoint)
+                  if (direction) {
+                    const directionOverlay = new kakao.maps.CustomOverlay({
+                      position: segment.path[Math.floor(segment.path.length / 2)],
+                      content: directionOverlayHtml(direction, segment.step),
+                      yAnchor: 0.5,
+                      zIndex: 32,
+                    })
+                    directionOverlay.setMap(map)
+                    overlayRef.current.push(directionOverlay)
+                  }
+
                   const endOverlay = new kakao.maps.CustomOverlay({
                     position: segment.path[segment.path.length - 1],
                     content: stepEndOverlayHtml(segment.step),
@@ -484,7 +563,7 @@ export default function RouteMap({
 
             setDistInfo({ dist, duration })
             setLocationNote(routeMode === 'walk'
-              ? '현재 도보 구간을 크게 보여줘요. 전체 경로가 필요하면 전체 보기를 누르세요.'
+              ? '도보는 출발·도착 위치를 잇는 참고선이에요. 아래 단계 안내를 먼저 확인하세요.'
               : routeGuide?.steps?.length
                 ? '현재 단계 위주로 확대돼요. 정류장·역 번호와 아래 안내를 함께 따라가세요.'
                 : '지도 선은 좌표 기준 참고선이에요. 정확한 순서는 아래 전체 경로를 따르세요.'
@@ -569,6 +648,15 @@ export default function RouteMap({
   const activeMapStep = stepsForMap[safeStepIndex]
   const activeStepStyle = STEP_STYLE[activeMapStep?.type] || STEP_STYLE.walk
   const activeStopPreview = stepStopPreview(activeMapStep)
+  const activeStepPoints = compactRoutePoints(activeMapStep?.routePoints?.length
+    ? activeMapStep.routePoints
+    : [activeMapStep?.startPoint, activeMapStep?.endPoint])
+  const activeDirection = activeStepPoints.length >= 2
+    ? bearingInfo(activeStepPoints[0], activeStepPoints[activeStepPoints.length - 1])
+    : null
+  const activeInstructionItems = stepInstructionItems(activeMapStep, activeDirection)
+  const previousMapStep = safeStepIndex > 0 ? stepsForMap[safeStepIndex - 1] : null
+  const nextMapStep = safeStepIndex < stepsForMap.length - 1 ? stepsForMap[safeStepIndex + 1] : null
   const canFocusStep = hasStartForMap && stepsForMap.length > 1
 
   return (
@@ -586,7 +674,7 @@ export default function RouteMap({
           <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
           <circle cx="12" cy="10" r="3"/>
         </svg>
-        <p style={{ fontWeight: 800, fontSize: 14, color: '#0F172A', margin: 0 }}>위치도</p>
+        <p style={{ fontWeight: 800, fontSize: 14, color: '#0F172A', margin: 0 }}>안내 지도</p>
 
         {(routeDistanceText || routeDuration) && (
           <div style={{ marginLeft: 8, display: 'flex', gap: 6 }}>
@@ -804,6 +892,104 @@ export default function RouteMap({
                 <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748B', fontWeight: 800, lineHeight: 1.45 }}>
                   {activeStopPreview}
                 </p>
+              )}
+              {activeInstructionItems.length > 0 && (
+                <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
+                  {activeInstructionItems.map((item, index) => (
+                    <div key={`${item}-${index}`} style={{
+                      display: 'grid',
+                      gridTemplateColumns: '22px 1fr',
+                      gap: 7,
+                      alignItems: 'start',
+                      background: index === 0 ? activeStepStyle.bg : '#F8FAFC',
+                      border: `1px solid ${index === 0 ? activeStepStyle.border : '#E2E8F0'}`,
+                      borderRadius: 12,
+                      padding: '8px 9px',
+                    }}>
+                      <span style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: '50%',
+                        background: index === 0 ? activeStepStyle.color : '#E2E8F0',
+                        color: index === 0 ? '#fff' : '#475569',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 12,
+                        fontWeight: 950,
+                      }}>
+                        {index + 1}
+                      </span>
+                      <span style={{ fontSize: 13, color: '#334155', fontWeight: 900, lineHeight: 1.35 }}>
+                        {item}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {stepsForMap.length > 1 && (
+                <div style={{
+                  marginTop: 12,
+                  display: 'grid',
+                  gridTemplateColumns: previousMapStep && nextMapStep ? '1fr 1fr' : '1fr',
+                  gap: 8,
+                }}>
+                  {previousMapStep && (
+                    <button
+                      type="button"
+                      onClick={() => onStepSelect?.(safeStepIndex - 1)}
+                      style={{
+                        minHeight: 44,
+                        borderRadius: 13,
+                        border: '1px solid #CBD5E1',
+                        background: '#fff',
+                        color: '#334155',
+                        fontSize: 13,
+                        fontWeight: 950,
+                        fontFamily: 'inherit',
+                        cursor: onStepSelect ? 'pointer' : 'default',
+                      }}
+                    >
+                      이전 안내
+                    </button>
+                  )}
+                  {nextMapStep ? (
+                    <button
+                      type="button"
+                      onClick={() => onStepSelect?.(safeStepIndex + 1)}
+                      style={{
+                        minHeight: 44,
+                        borderRadius: 13,
+                        border: `1.5px solid ${activeStepStyle.color}`,
+                        background: activeStepStyle.color,
+                        color: '#fff',
+                        fontSize: 13,
+                        fontWeight: 950,
+                        fontFamily: 'inherit',
+                        cursor: onStepSelect ? 'pointer' : 'default',
+                        lineHeight: 1.25,
+                        padding: '8px 10px',
+                      }}
+                    >
+                      다음: {stepActionTitle(nextMapStep)}
+                    </button>
+                  ) : (
+                    <div style={{
+                      minHeight: 44,
+                      borderRadius: 13,
+                      border: '1px solid #CCFBF1',
+                      background: '#F0FDFA',
+                      color: '#0F766E',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 13,
+                      fontWeight: 950,
+                    }}>
+                      마지막 안내예요
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
