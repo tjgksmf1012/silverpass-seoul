@@ -103,6 +103,18 @@ cp .env.example .env
 npm run dev
 ```
 
+## 테스트
+
+```bash
+npm test
+```
+
+`src/services` 아래 핵심 로직(응급 감지, AI 폴백, 프로필/이동 이력 저장)에 대한 vitest 단위 테스트입니다. PR을 올리기 전에 `npm test`와 `npm run build`가 통과하는지 확인해 주세요. GitHub Actions([.github/workflows/ci.yml](.github/workflows/ci.yml))에서도 push/PR마다 동일하게 검증합니다.
+
+## 기여하기
+
+버그 리포트, 기능 제안, PR 모두 환영합니다. 개발 환경 설정과 절차는 [CONTRIBUTING.md](./CONTRIBUTING.md)를 참고해 주세요.
+
 ## Vercel 환경변수
 
 Production 배포에는 아래 서버 전용 키를 Vercel Project Settings > Environment Variables에 등록합니다.
