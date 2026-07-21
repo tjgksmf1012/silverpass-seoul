@@ -221,6 +221,15 @@ export default function Home() {
         background: 'linear-gradient(165deg, #064E3B 0%, #0F766E 52%, #0D9488 100%)',
         padding: '56px 20px 28px',
       }}>
+        {/* 앱 상단 타이틀 */}
+        <p style={{
+          textAlign: 'center', fontSize: 11, fontWeight: 800,
+          color: 'rgba(255,255,255,0.6)', letterSpacing: '0.02em',
+          margin: '0 0 16px',
+        }}>
+          고령자 맞춤형 이동 지원을 위한 생성형 AI 기반 공공데이터 융합 시스템
+        </p>
+
         {/* 인사말 + 위치 칩 */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
           <div>
