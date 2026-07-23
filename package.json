@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "verify:prod": "node scripts/verify-prod.mjs",
-    "verify:tmap": "node scripts/verify-prod.mjs --require-tmap"
+    "verify:tmap": "node scripts/verify-prod.mjs --require-tmap",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
@@ -26,6 +28,7 @@
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "vite": "^5.2.13",
-    "vite-plugin-pwa": "^1.2.0"
+    "vite-plugin-pwa": "^1.2.0",
+    "vitest": "^3.2.7"
   }
 }

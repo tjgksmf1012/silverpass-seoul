@@ -93,6 +93,9 @@ export default function Login() {
           </svg>
         </div>
         <h1 className="text-2xl font-bold text-gray-900">실버패스 서울</h1>
+        <p className="text-xs font-bold text-brand-600 text-center leading-snug px-6">
+          고령자 맞춤형 이동 지원을 위한<br />생성형 AI 기반 공공데이터 융합 시스템
+        </p>
       </div>
 
       <div className="w-full max-w-sm space-y-4">
